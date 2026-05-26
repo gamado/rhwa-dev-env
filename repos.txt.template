@@ -1,0 +1,18 @@
+# RHWA Repositories Configuration
+# ================================
+#
+# Format: repo_url | directory | branch
+#
+# - Lines starting with # are comments
+# - Empty lines are ignored
+# - branch: use 'main', 'master', a tag, or a specific branch
+#
+# All repos are cloned using --filter=blob:none (blobless clone):
+# - Full repo structure visible, all files accessible
+# - Blob contents fetched on-demand when read
+# - Much faster initial clone, smaller disk footprint
+
+# Shared tooling
+https://github.com/openshift-eng/two-node-toolbox.git | two-node-toolbox | main
+
+# Add RHWA repositories below:
