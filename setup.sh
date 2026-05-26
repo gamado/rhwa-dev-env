@@ -147,7 +147,7 @@ sync_claude_components() {
             mkdir -p "$CLAUDE_DIR/$component"
 
             # Remove stale symlinks in this component dir (only symlinks, not real files)
-            find "$CLAUDE_DIR/$component" -maxdepth 1 -type l -name "${repo}-*" -delete
+            find "$CLAUDE_DIR/$component" -maxdepth 1 -type l -name "${repo}-*.link" -delete
 
             # Symlink each item with repo prefix
             for item in "$component_dir"/*; do
@@ -160,7 +160,7 @@ sync_claude_components() {
                 [[ "$name" == "OWNERS" ]] && continue
 
                 ln -sf "../../repos/$repo/.claude/$component/$name" \
-                       "$CLAUDE_DIR/$component/${repo}-${name}"
+                       "$CLAUDE_DIR/$component/${repo}-${name}.link"
                 count=$((count + 1))
             done
         done
@@ -183,6 +183,7 @@ sync_claude_components() {
             fi
         done
     fi
+
 
     # Check for broken symlinks
     local broken
