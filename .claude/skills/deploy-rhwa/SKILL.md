@@ -171,14 +171,30 @@ Wait for `UPDATED=True`, `UPDATING=False`, `READYMACHINECOUNT` equals `MACHINECO
 
 ## Step 6: Create Subscriptions
 
-Install all operators in `openshift-operators` namespace using the `stable` channel:
+First create the namespace and OperatorGroup:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-workload-availability
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-workload-availability
+  namespace: openshift-workload-availability
+spec: {}
+```
+
+Then install all operators in `openshift-workload-availability` namespace using the `stable` channel:
 
 ```yaml
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: self-node-remediation
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: self-node-remediation
@@ -189,7 +205,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: node-healthcheck-operator
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: node-healthcheck-operator
@@ -200,7 +216,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: fence-agents-remediation
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: fence-agents-remediation
@@ -211,7 +227,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: machine-deletion-remediation
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: machine-deletion-remediation
@@ -222,7 +238,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: node-maintenance-operator
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: node-maintenance-operator
@@ -233,7 +249,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: storage-based-remediation
-  namespace: openshift-operators
+  namespace: openshift-workload-availability
 spec:
   channel: stable
   name: storage-based-remediation
@@ -245,13 +261,13 @@ spec:
 
 ```bash
 # All CSVs should show Succeeded
-oc get csv -n openshift-operators
+oc get csv -n openshift-workload-availability
 
 # All operator pods should be Running
-oc get pods -n openshift-operators | grep -E 'snr|nhc|far|mdr|node-maintenance|node-health|fence|machine-deletion|storage-based'
+oc get pods -n openshift-workload-availability
 
 # Verify versions match the build doc
-oc get csv -n openshift-operators -o custom-columns='NAME:.metadata.name,VERSION:.spec.version'
+oc get csv -n openshift-workload-availability -o custom-columns='NAME:.metadata.name,VERSION:.spec.version'
 
 # Verify CatalogSource image matches expected IIB
 oc get catalogsource rhwa-catalog -n openshift-marketplace -o jsonpath='{.spec.image}'
