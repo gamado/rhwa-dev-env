@@ -18,3 +18,6 @@ https://github.com/openshift-eng/two-node-toolbox.git | two-node-toolbox | main
 # Add RHWA repositories below:
 https://github.com/medik8s/system-tests.git | system-tests | main
 https://github.com/medik8s/storage-based-remediation.git | storage-based-remediation | main
+
+# Prow CI infrastructure
+https://github.com/openshift/release.git | openshift-release | master
