@@ -201,7 +201,7 @@ clone_all() {
     log_info "Cloning all repositories..."
     echo
 
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if parse_repo_line "$line"; then
             clone_repo "$url" "$dir" "$branch"
         fi
@@ -218,7 +218,7 @@ update_all() {
     log_info "Updating all repositories..."
     echo
 
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if parse_repo_line "$line"; then
             if [[ -d "$REPOS_DIR/$dir/.git" ]]; then
                 update_repo "$dir"
@@ -238,7 +238,7 @@ handle_specific_repo() {
     local target_dir="$2"
     local found=false
 
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if parse_repo_line "$line"; then
             if [[ "$dir" == "$target_dir" ]]; then
                 found=true
@@ -269,7 +269,7 @@ show_status() {
     printf "%-30s %-12s %-20s %s\n" "DIRECTORY" "STATUS" "BRANCH" "LAST COMMIT"
     printf "%-30s %-12s %-20s %s\n" "---------" "------" "------" "-----------"
 
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if parse_repo_line "$line"; then
             local target="$REPOS_DIR/$dir"
             local status branch_info last_commit
@@ -297,7 +297,7 @@ list_repos() {
     printf "%-30s %-50s %-12s\n" "DIRECTORY" "URL" "BRANCH"
     printf "%-30s %-50s %-12s\n" "---------" "---" "------"
 
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if parse_repo_line "$line"; then
             local short_url="${url#https://github.com/}"
             printf "%-30s %-50s %-12s\n" "$dir" "$short_url" "$branch"
