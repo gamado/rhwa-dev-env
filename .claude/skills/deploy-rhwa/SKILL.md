@@ -1,39 +1,100 @@
 ---
 name: deploy-rhwa
-description: Use when deploying RHWA (Workload Availability) operators on an OCP cluster using a pre-production IIB from Konflux. Covers CatalogSource, IDMS extraction from IIB, MCP rollout, subscriptions, and verification.
+description: Deploy RHWA operators on an OCP cluster. Supports deploying all or specific operators (snr, far, nhc, mdr, nmo, sbr) from either a pre-production IIB or the GA redhat-operators catalog.
 ---
 
 # Deploy RHWA Operators on OCP
 
-## Overview
+## Usage
 
-Deploy all RHWA operators (NHC, SNR, FAR, MDR, NMO, SBR) on an OpenShift cluster using a pre-production IIB (Index Image Bundle) from Konflux. The IIB contains all operator catalogs; an IDMS mirrors pre-production images from `quay.io/redhat-user-workloads/rhwa-tenant/` since `registry.redhat.io` images don't exist until GA.
+```
+/deploy-rhwa [operators] [source]
+```
 
-## When to Use
+### Arguments
 
-- Deploying RHWA for QE testing with a staged IIB
-- Setting up a new cluster for RHWA validation
-- Upgrading RHWA to a new IIB build
+- **operators** (optional): Comma-separated list of operators to deploy. Default: `all`
+  - Valid values: `snr`, `far`, `nhc`, `mdr`, `nmo`, `sbr`, `all`
+  - Examples: `snr,far` or `snr` or `all`
+
+- **source** (optional): Where to install from. Default: `ga`
+  - `ga` — install from `redhat-operators` catalog (GA versions, works from any cluster)
+  - `iib <number>` — install from a pre-production IIB (requires VPN/lab network access)
+  - If just a number is given, treat it as IIB number: `/deploy-rhwa all 1151696`
+
+### Examples
+
+```
+/deploy-rhwa                        → deploy all operators from GA catalog
+/deploy-rhwa snr,far                → deploy only SNR and FAR from GA catalog
+/deploy-rhwa snr,far ga             → same as above (explicit)
+/deploy-rhwa all iib 1151696        → deploy all operators from IIB 1151696
+/deploy-rhwa snr iib 1151696        → deploy only SNR from IIB 1151696
+/deploy-rhwa snr,far,nhc 1151696    → deploy SNR, FAR, NHC from IIB
+```
+
+## Operator Package Reference
+
+| Abbreviation | Package Name | RHWA 4.22-0 Version |
+|---|---|---|
+| `snr` | `self-node-remediation` | v0.13.0 |
+| `nhc` | `node-healthcheck-operator` | v0.12.0 |
+| `far` | `fence-agents-remediation` | v0.8.0 |
+| `mdr` | `machine-deletion-remediation` | v0.7.0 |
+| `nmo` | `node-maintenance-operator` | v5.7.0 |
+| `sbr` | `storage-based-remediation` | v0.3.0 |
 
 ## Prerequisites
 
-- `oc` access to the target cluster (or SSH access to a host with `oc`)
-- Cluster must reach `registry-proxy.engineering.redhat.com` (RH VPN) or use `brew.registry.redhat.io` as fallback
-- Cluster must reach `quay.io/redhat-user-workloads/rhwa-tenant/`
+- `KUBECONFIG` set or `oc` access to the target cluster
+- For IIB source: cluster must reach `registry-proxy.engineering.redhat.com` (RH VPN/lab) or `brew.registry.redhat.io`
+- For GA source: cluster must reach `registry.redhat.io` (public, works from AWS/anywhere)
 
-## Step 1: Find the Latest IIB
+## Implementation Steps
 
-Check the build location doc: https://docs.google.com/document/d/1c5xFWKs_NabZYWBwebhzp7-8hzNWDcp9tQsvqG0vfWI/edit
+### Step 1: Parse arguments
 
-Look for the most recent entry under **IIBs and Snapshot** for your target OCP version. The IIB format is:
+Map abbreviations to package names:
 
+| Abbrev | Package name |
+|--------|-------------|
+| snr | self-node-remediation |
+| nhc | node-healthcheck-operator |
+| far | fence-agents-remediation |
+| mdr | machine-deletion-remediation |
+| nmo | node-maintenance-operator |
+| sbr | storage-based-remediation |
+
+If `all` is specified (or no operators argument), use all 6.
+
+Determine the catalog source name and image:
+- GA mode: `source: redhat-operators`, `sourceNamespace: openshift-marketplace` (no CatalogSource creation needed)
+- IIB mode: `source: rhwa-catalog`, create CatalogSource with the IIB image
+
+### Step 2: Create namespace and OperatorGroup (if not exists)
+
+```bash
+oc create namespace openshift-workload-availability 2>/dev/null || true
 ```
-registry-proxy.engineering.redhat.com/rh-osbs/iib:<NUMBER>
+
+```yaml
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-workload-availability
+  namespace: openshift-workload-availability
+spec: {}
 ```
 
-If cluster lacks RH VPN connectivity, use `brew.registry.redhat.io/rh-osbs/iib:<NUMBER>` instead.
+Check if OperatorGroup already exists before creating:
 
-## Step 2: Create CatalogSource
+```bash
+oc get operatorgroup -n openshift-workload-availability 2>/dev/null || oc apply -f operatorgroup.yaml
+```
+
+### Step 3: Create CatalogSource (IIB mode only)
+
+Only for IIB source. Skip this step for GA mode.
 
 ```yaml
 apiVersion: operators.coreos.com/v1alpha1
@@ -44,52 +105,98 @@ metadata:
 spec:
   sourceType: grpc
   image: registry-proxy.engineering.redhat.com/rh-osbs/iib:<NUMBER>
+  displayName: RHWA IIB
+  publisher: Red Hat
 ```
 
-Apply and verify the pod is running:
+Wait for catalog pod to be ready:
 
 ```bash
-oc apply -f catalogsource.yaml
-oc get pods -n openshift-marketplace | grep rhwa
+oc wait --for=condition=Ready pod -l olm.catalogSource=rhwa-catalog -n openshift-marketplace --timeout=120s
 ```
 
-Wait for `connectionState: READY`:
+If the pod has `ImagePullBackOff`, try `brew.registry.redhat.io/rh-osbs/iib:<NUMBER>` instead.
+
+### Step 4: Extract and apply IDMS (IIB mode only)
+
+Only for IIB source. Skip for GA mode (GA images are on registry.redhat.io which is public).
+
+The IIB contains catalog YAML files with `registry.redhat.io` image references that don't exist yet (pre-GA). Extract and map them:
 
 ```bash
-oc get catalogsource rhwa-catalog -n openshift-marketplace -o yaml | grep lastObservedState
-```
-
-## Step 3: Extract IDMS Mappings from IIB
-
-The IIB contains catalog YAML files with the exact `registry.redhat.io` image references. Extract them to build the IDMS:
-
-```bash
-# List RHWA packages in the IIB
-podman run --rm --entrypoint='' <IIB_IMAGE> ls /configs/ | grep -E 'self-node|node-health|fence-agents|machine-deletion|node-maintenance|storage-based'
-
-# Extract registry.redhat.io source names per operator
 for pkg in self-node-remediation node-healthcheck-operator fence-agents-remediation \
            machine-deletion-remediation node-maintenance-operator storage-based-remediation; do
-  echo "=== $pkg ==="
   podman run --rm --entrypoint='' <IIB_IMAGE> \
     grep -o 'registry.redhat.io/workload-availability/[^@"]*' /configs/$pkg/catalog.yaml | sort -u
 done
 ```
 
-This outputs the exact `registry.redhat.io` source names needed for the IDMS.
+Apply IDMS mapping each `registry.redhat.io` source to its `quay.io/redhat-user-workloads/rhwa-tenant/` mirror. See the IDMS example in the appendix.
 
-## Step 4: Build and Apply IDMS
+**IMPORTANT:** IDMS triggers a MachineConfig rollout — nodes reboot one by one. Wait for MCP:
 
-Map each `registry.redhat.io` source to its `quay.io/redhat-user-workloads/rhwa-tenant/` mirror. The mirror repo names follow the pattern on quay.io under the `redhat-user-workloads` org (search for `rhwa-tenant`).
+```bash
+oc get mcp
+# Wait for UPDATED=True, UPDATING=False
+```
 
-### Mapping Convention
+### Step 5: Create Subscriptions
 
-| registry.redhat.io source | quay.io mirror |
-|---|---|
-| `workload-availability/<name>-rhel9-operator` | `rhwa-tenant/<app>/<abbrev>-operator-<version>` |
-| `workload-availability/<name>-operator-bundle` | `rhwa-tenant/<app>/<abbrev>-bundle-<version>` |
+For each selected operator, create a Subscription:
 
-### Example IDMS (RHWA 4.22-0)
+```yaml
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: <package-name>
+  namespace: openshift-workload-availability
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: <package-name>
+  source: <catalog-source>        # "redhat-operators" for GA, "rhwa-catalog" for IIB
+  sourceNamespace: openshift-marketplace
+```
+
+Only create Subscriptions for the selected operators, not all 6.
+
+### Step 6: Wait and verify
+
+Wait for CSVs to reach `Succeeded` phase:
+
+```bash
+# Wait up to 120s for pods to appear
+sleep 30
+
+# Check CSV status
+oc get csv -n openshift-workload-availability
+
+# Check pods
+oc get pods -n openshift-workload-availability
+```
+
+All requested CSVs should show `Phase: Succeeded`. All pods should be `Running`.
+
+Report the results in a summary table:
+
+```
+| Operator | Version | CSV Phase | Pods |
+|----------|---------|-----------|------|
+| SNR      | v0.13.0 | Succeeded | 2/2  |
+| FAR      | v0.8.0  | Succeeded | 2/2  |
+```
+
+## Common Issues
+
+| Problem | Fix |
+|---------|-----|
+| CatalogSource pod `ImagePullBackOff` | Cluster can't reach `registry-proxy`. Use `brew.registry.redhat.io` or switch to `ga` source |
+| Operator pod `ImagePullBackOff` (IIB mode) | IDMS not applied or missing a mapping. Check `oc get idms` |
+| CSV stuck in `Installing` | Check operator pod logs: `oc logs -n openshift-workload-availability <pod>` |
+| OperatorGroup conflict | Delete existing OperatorGroup: `oc delete og -n openshift-workload-availability --all` then recreate |
+| GA catalog shows older version than IIB | Expected — GA catalog has released versions, IIB has pre-release |
+
+## Appendix: IDMS Example (RHWA 4.22-0)
 
 ```yaml
 apiVersion: config.openshift.io/v1
@@ -151,151 +258,8 @@ spec:
       source: registry.redhat.io/workload-availability/storage-based-remediation-operator-bundle
 ```
 
-Apply:
-
-```bash
-oc apply -f idms.yaml
-```
-
-**IMPORTANT:** IDMS triggers a MachineConfig rollout — nodes reboot one by one.
-
-## Step 5: Wait for MCP Rollout
-
-Monitor until all nodes are updated:
-
-```bash
-oc get mcp
-```
-
-Wait for `UPDATED=True`, `UPDATING=False`, `READYMACHINECOUNT` equals `MACHINECOUNT`.
-
-## Step 6: Create Subscriptions
-
-First create the namespace and OperatorGroup:
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: openshift-workload-availability
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: openshift-workload-availability
-  namespace: openshift-workload-availability
-spec: {}
-```
-
-Then install all operators in `openshift-workload-availability` namespace using the `stable` channel:
-
-```yaml
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: self-node-remediation
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: self-node-remediation
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: node-healthcheck-operator
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: node-healthcheck-operator
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: fence-agents-remediation
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: fence-agents-remediation
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: machine-deletion-remediation
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: machine-deletion-remediation
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: node-maintenance-operator
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: node-maintenance-operator
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: storage-based-remediation
-  namespace: openshift-workload-availability
-spec:
-  channel: stable
-  name: storage-based-remediation
-  source: rhwa-catalog
-  sourceNamespace: openshift-marketplace
-```
-
-## Step 7: Verify Deployment
-
-```bash
-# All CSVs should show Succeeded
-oc get csv -n openshift-workload-availability
-
-# All operator pods should be Running
-oc get pods -n openshift-workload-availability
-
-# Verify versions match the build doc
-oc get csv -n openshift-workload-availability -o custom-columns='NAME:.metadata.name,VERSION:.spec.version'
-
-# Verify CatalogSource image matches expected IIB
-oc get catalogsource rhwa-catalog -n openshift-marketplace -o jsonpath='{.spec.image}'
-```
-
-## Quick Reference
-
-| Component | Package Name | RHWA 4.22-0 Version |
-|-----------|-------------|---------------------|
-| Node Health Check | `node-healthcheck-operator` | v0.12.0 |
-| Self Node Remediation | `self-node-remediation` | v0.13.0 |
-| Fence Agents Remediation | `fence-agents-remediation` | v0.8.0 |
-| Machine Deletion Remediation | `machine-deletion-remediation` | v0.7.0 |
-| Node Maintenance Operator | `node-maintenance-operator` | v5.7.0 |
-| Storage Based Remediation | `storage-based-remediation` | v0.3.0 |
-
-## Common Issues
-
-| Problem | Fix |
-|---------|-----|
-| CatalogSource pod has ImagePullBackOff | Cluster can't reach `registry-proxy`. Use `brew.registry.redhat.io` instead |
-| Operator install fails with ImagePullBackOff | IDMS not applied correctly or missing a mapping. Check `oc get idms` |
-| Nodes not rebooting after IDMS | Check `oc get mcp` — may already be rolled out if a previous IDMS existed |
-| `oc get packagemanifest` shows duplicates | Same operator in multiple catalogs (rhwa-catalog + Red Hat Operators). Subscription `source` field ensures the correct one is used |
-
 ## References
 
-- Testing team tutorial: https://docs.google.com/document/d/1E-arB0rzqZzWzI-T5EaKPdEtNRqZjv-xS-BWUB8-Ink/edit
 - Build location doc: https://docs.google.com/document/d/1c5xFWKs_NabZYWBwebhzp7-8hzNWDcp9tQsvqG0vfWI/edit
+- Testing team tutorial: https://docs.google.com/document/d/1E-arB0rzqZzWzI-T5EaKPdEtNRqZjv-xS-BWUB8-Ink/edit
 - Quay repos: https://quay.io/organization/redhat-user-workloads (search `rhwa-tenant`)
-- QE automation: https://gitlab.cee.redhat.com/ocp-edge-qe/ocp-edge-auto/

@@ -102,20 +102,23 @@ Tracking all 24 SNR tests from the Python ocp-edge-auto framework for migration 
 
 ## Migration Phases
 
-### Phase 1 — Post-deployment verification (P1) `[ ]`
+### Phase 1 — Post-deployment verification (P1) `[x]`
 
 Passed on both x86 and ARM. Pure API/object checks, no node disruption, ~2 min total. Establishes the Go test scaffold, client setup, and assertion patterns.
 
 **Source:** `test_snr_cli.py` → `TestPostDeploymentSnr`
+**PR:** [medik8s/system-tests#13](https://github.com/medik8s/system-tests/pull/13)
+**Jira:** [RHWA-1074](https://redhat.atlassian.net/browse/RHWA-1074)
 
 | # | Test | Polarion | What to implement | Progress |
 |---|------|----------|-------------------|----------|
-| 1 | test_snr_resources_are_installed_and_running | OCP-54205 | Get SNRC by name, verify DS pods on all nodes, verify controller-manager replicas | `[ ]` |
-| 2 | test_snr_only_automatic_remediation_template_exists | OCP-71010 | Get SNRT "Automatic", verify strategy field, assert ResourceDeletion/NodeDeletion don't exist | `[ ]` |
-| 3 | test_snr_annotations | OCP-52136 | Get SNR CSV, check annotations (valid-subscription, support, repo, maintainers) | `[ ]` |
-| 4 | test_snr_metadata | OCP-70705 | Get SNR CSV, check infrastructure annotations, suggested-namespace, replaces field | `[ ]` |
+| 1 | test_snr_resources_are_installed_and_running | OCP-54205 | Get SNRC by name, verify DS pods on all nodes, verify controller-manager replicas | `[x]` |
+| 2 | test_snr_only_automatic_remediation_template_exists | OCP-71010 | Get SNRT "Automatic", verify strategy field, assert ResourceDeletion/NodeDeletion don't exist | `[x]` |
+| 3 | test_snr_annotations | OCP-52136 | Get SNR CSV, check annotations (valid-subscription, support, repo, maintainers) | `[x]` |
+| 4 | test_snr_metadata | OCP-70705 | Get SNR CSV, check infrastructure annotations, suggested-namespace, replaces field | `[x]` |
 
 **Done when:** All 4 tests pass on a deployed RHWA cluster (x86 and ARM).
+**Status:** 4/4 passed on ARM64 (nvd-srv-16, IIB 1151696, SNR v0.13.0) and x86 (AWS Cluster Bot, GA catalog, SNR v0.12.1).
 
 ---
 
