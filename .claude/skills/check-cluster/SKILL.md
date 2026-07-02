@@ -99,5 +99,5 @@ Flag any issues:
 |------|----------|------|----------|
 | srv-16 | nvd-srv-16.nvidia.eng.rdu2.redhat.com | ARM64 | RDU (Nvidia lab) |
 | edge119 | ocp-edge119.lab.eng.tlv2.redhat.com | x86 | TLV lab |
-| edge128 | ocp-edge128.lab.eng.tlv2.redhat.com | x86 | TLV lab (our dev machine) |
+| edge128 | ocp-edge128.lab.eng.tlv2.redhat.com | x86 | TLV lab |
 | AWS | varies (Cluster Bot) | x86 | AWS us-east-2 |

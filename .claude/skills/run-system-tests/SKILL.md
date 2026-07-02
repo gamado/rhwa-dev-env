@@ -80,7 +80,7 @@ sshpass -p "qum10net" ssh root@nvd-srv-16.nvidia.eng.rdu2.redhat.com "go version
 
 ### Step 3: Run tests
 
-#### Local execution (edge128 or any machine with Go + kubeconfig access)
+#### Local execution (any machine with Go + kubeconfig access)
 
 ```bash
 export PATH=/usr/local/go/bin:$PATH
@@ -136,11 +136,11 @@ ls -la /tmp/reports/  # default report directory
 
 ## Known Cluster Targets
 
-| Name | Hostname | Kubeconfig | Arch | Network from edge128 |
-|------|----------|-----------|------|---------------------|
-| srv-16 | nvd-srv-16.nvidia.eng.rdu2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | ARM64 | No (run remotely) |
-| edge119 | ocp-edge119.lab.eng.tlv2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | x86 | Yes (direct) |
-| AWS | varies | /tmp/aws-kubeconfig | x86 | Yes (public API) |
+| Name | Hostname | Kubeconfig | Arch | Access |
+|------|----------|-----------|------|--------|
+| srv-16 | nvd-srv-16.nvidia.eng.rdu2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | ARM64 | SSH only (run remotely) |
+| edge119 | ocp-edge119.lab.eng.tlv2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | x86 | SSH or direct from edge servers |
+| AWS | varies | /tmp/aws-kubeconfig | x86 | Public API (works from anywhere) |
 
 ## Common Issues
 

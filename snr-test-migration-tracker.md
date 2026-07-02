@@ -122,58 +122,66 @@ Passed on both x86 and ARM. Pure API/object checks, no node disruption, ~2 min t
 
 ---
 
-### Phase 2.1 — Config & negative scenarios from test_snr_cli.py (P2) `[ ]`
+### Phase 2.1 — Config & negative scenarios from test_snr_cli.py (P2) `[x]`
 
-Passed on x86. Extends Phase 1 with config manipulation, must-gather, CRD validation, and negative input tests — all within the same source file.
+Passed on x86 and ARM64. Config manipulation, CRD validation, and negative input tests. Split into 2 PRs: A (CRD/negative), B (config lifecycle). Must-gather (Test 5) moved out of scope for this ticket.
 
-**Source:** `test_snr_cli.py` → `TestSnrConfigNegativeScenarios`, `TestSnrNegativeScenarios`, remaining `TestPostDeploymentSnr`
+**Source:** `test_snr_cli.py` → `TestSnrConfigNegativeScenarios`, `TestSnrNegativeScenarios`
+**PR (A):** [medik8s/system-tests#16](https://github.com/medik8s/system-tests/pull/16)
+**PR (B):** [medik8s/system-tests#39](https://github.com/medik8s/system-tests/pull/39)
+**Jira:** [RHWA-1075](https://redhat.atlassian.net/browse/RHWA-1075) (Closed)
 
 | # | Test | Polarion | What to implement | Progress |
 |---|------|----------|-------------------|----------|
-| 5 | test_snr_must_gather | OCP-50774 | Run RHWA must-gather, verify SNR data files in output | `[ ]` |
-| 6 | test_snr_description_of_safeTimeToAssumeNodeRebootedSeconds | OCP-60824 | Get SNR CRD, validate description text for safeTimeToAssumeNodeRebootedSeconds | `[ ]` |
-| 12 | test_non_default_snrc_creation | OCP-50961 | Create second SNRC → expect rejection with specific error | `[ ]` |
-| 13 | test_snr_auto_detects_softdog_path | OCP-50770 | Patch SNRC watchdog to invalid path → verify auto-detect log message | `[ ]` |
-| 14 | test_snrc_deletion_disables_snr | OCP-74298 | Delete SNRC → DS pods removed; create manual SNR → "config not found"; recreate SNRC → pods return | `[ ]` |
-| 15 | test_invalid_values_in_snrc | OCP-47330 | Create SNRC with invalid string/duration values → expect validation errors | `[ ]` |
-| 16 | test_last_error_captured_in_snr | OCP-50583 | Create SNR with fake node name → verify lastError in status | `[ ]` |
+| 6 | test_snr_description_of_safeTimeToAssumeNodeRebootedSeconds | OCP-60824 | Get SNR CRD, validate description text for safeTimeToAssumeNodeRebootedSeconds | `[x]` (PR A) |
+| 12 | test_non_default_snrc_creation | OCP-50961 | Create second SNRC → expect rejection with specific error | `[x]` (PR A) |
+| 13 | test_snr_auto_detects_softdog_path | OCP-50770 | Patch SNRC watchdog to invalid path → verify auto-detect log message | `[x]` (PR B) |
+| 14 | test_snrc_deletion_disables_snr | OCP-74298 | Delete SNRC → DS pods removed; create manual SNR → "config not found"; recreate SNRC → pods return | `[x]` (PR B) |
+| 15 | test_invalid_values_in_snrc | OCP-47330 | Create SNRC with invalid string/duration values → expect validation errors | `[x]` (PR A) |
+| 16 | test_last_error_captured_in_snr | OCP-50583 | Create SNR with fake node name → verify lastError in status | `[x]` (PR A) |
 
-**Done when:** All 7 tests pass on x86. ARM validation as stretch goal.
+**Done when:** All 6 tests pass on x86. ARM validation as stretch goal.
+**Status:** 6/6 passed on ARM64 (nvd-srv-16, SNR v0.13.0) and x86 (AWS Cluster Bot, OCP 4.22, SNR v0.13.0 GA).
 
 ---
 
-### Phase 2.2 — Negative & condition tests from test_only_snr_cli.py (P2) `[ ]`
+### Phase 2.2 — Negative & condition tests from test_only_snr_cli.py (P2) `[x]`
 
 Passed on x86. Introduces the second source file — unsupported strategy rejection and SNR condition/status validation.
 
 **Source:** `test_only_snr_cli.py` → `TestSnrNegativeScenarios`, `TestSnrProcessingCondition`
+**PR:** [medik8s/system-tests#17](https://github.com/medik8s/system-tests/pull/17)
+**Jira:** [RHWA-1076](https://redhat.atlassian.net/browse/RHWA-1076)
 
 | # | Test | Polarion | What to implement | Progress |
 |---|------|----------|-------------------|----------|
-| 19 | test_create_snr_with_unsupported_strategy | OCP-60877 | Create SNR with NodeDeletion strategy → expect "Unsupported value" error | `[ ]` |
-| 20 | test_create_snr_template_with_unsupported_strategy | OCP-60822 | Create SNRT with NodeDeletion strategy → expect "Unsupported value" error | `[ ]` |
-| 21 | test_snr_conditions_while_nhc_timed_out_annotation | OCP-60881 | Create SNR with nhc-timed-out annotation → verify Processing/Succeeded conditions + stop log | `[ ]` |
-| 22 | test_snr_conditions_with_non_existent_node_name | OCP-70584 | Create SNR with fake node name → verify Processing/Succeeded show "RemediationSkippedNodeNotFound" | `[ ]` |
+| 19 | test_create_snr_with_unsupported_strategy | OCP-60877 | Create SNR with NodeDeletion strategy → expect "Unsupported value" error | `[x]` |
+| 20 | test_create_snr_template_with_unsupported_strategy | OCP-60822 | Create SNRT with NodeDeletion strategy → expect "Unsupported value" error | `[x]` |
+| 21 | test_snr_conditions_while_nhc_timed_out_annotation | OCP-60881 | Create SNR with nhc-timed-out annotation → verify Processing/Succeeded conditions + stop log | `[x]` |
+| 22 | test_snr_conditions_with_non_existent_node_name | OCP-70584 | Create SNR with fake node name → verify Processing/Succeeded show "RemediationSkippedNodeNotFound" | `[x]` |
 
 **Done when:** All 4 tests pass on x86.
+**Status:** 4/4 passed on ARM64 (nvd-srv-16, SNR v0.13.0) and x86 (AWS Cluster Bot, SNR v0.12.1).
 
 ---
 
-### Phase 3 — Remediation tests (P3) `[ ]`
+### Phase 3 — Remediation & must-gather tests (P3) `[ ]`
 
-Kubelet-stop tests that trigger actual node reboots via MHC/NHC detection. Failed on x86 edge119 (may be env-specific). Requires SSH access to nodes and longer timeouts (~15 min per remediation cycle).
+Must-gather plus kubelet-stop tests that trigger actual node reboots via MHC/NHC detection. Requires SSH access to nodes and longer timeouts (~15 min per remediation cycle).
 
-**Source:** `test_snr_cli.py` → `TestHealthDetectionForWorkersUsingSnr`, `TestHealthDetectionForControlPlanesUsingSnr`
+**Source:** `test_snr_cli.py` → `TestPostDeploymentSnr` (must-gather), `TestHealthDetectionForWorkersUsingSnr`, `TestHealthDetectionForControlPlanesUsingSnr`
+**Jira:** [RHWA-1077](https://redhat.atlassian.net/browse/RHWA-1077)
 
 | # | Test | Polarion | What to implement | Progress |
 |---|------|----------|-------------------|----------|
+| 5 | test_snr_must_gather | OCP-50774 | Run RHWA must-gather, verify SNR data files in output | `[ ]` |
 | 7 | test_snr_with_stop_kubelet_for_worker | OCP-52417 / OCP-52416 | Stop kubelet on worker → MHC/NHC detects → SNR remediates → node reboots → verify recovery | `[ ]` |
 | 8 | test_remediation_strategy_resource_deletion | OCP-50772 | NHC + ResourceDeletion strategy: deploy app, stop kubelet → verify pod rescheduled | `[ ]` |
 | 9 | test_remediation_strategy_out_of_service_taint | OCP-61594 | NHC + OutOfServiceTaint strategy: deploy app, stop kubelet → verify pod rescheduled | `[ ]` |
 | 10 | test_snr_with_stop_kubelet_for_master | OCP-55058 / OCP-55059 | Stop kubelet on master → MHC/NHC detects → SNR with NoExecute taints → master reboots | `[ ]` |
 | 11 | test_snr_with_stop_kubelet_for_master_and_worker | OCP-56069 | NHC-only: stop kubelet on master AND worker simultaneously → both remediated | `[ ]` |
 
-**Done when:** All 5 tests pass on x86 with both mhc and nhc modes. ARM as stretch goal.
+**Done when:** All 6 tests pass on x86 with both mhc and nhc modes. ARM as stretch goal.
 
 ---
 
@@ -196,14 +204,15 @@ Requires special infrastructure: KVM suspend (hypervisor access) or MachineSet s
 
 ## Phase Summary
 
-| Phase | Tests | Source files | Scope |
-|-------|------:|-------------|-------|
-| **Phase 1** | 4 | `test_snr_cli.py` | Passed on both x86 and ARM — migrate first as proven reference |
-| **Phase 2.1** | 7 | `test_snr_cli.py` | Passed on x86 only, or simple verification tests |
-| **Phase 2.2** | 4 | `test_only_snr_cli.py` | Passed on x86 only, or simple verification tests |
-| **Phase 3** | 5 | `test_snr_cli.py` | Failed due to known reasons (env/infra), likely pass after fix |
-| **Phase 4** | 4 | `test_only_snr_cli.py`, `test_snr_scale.py` | Needs special infra (KVM suspend, scale workers), or permanently skipped |
-| **Total** | **24** | | |
+| Phase | Tests | Source files | Status |
+|-------|------:|-------------|--------|
+| **Phase 1** | 4 | `test_snr_cli.py` | **Done** (PR #13) |
+| **Phase 2.1** | 6 | `test_snr_cli.py` | **Done** (PR #16, #39) |
+| **Phase 2.2** | 4 | `test_only_snr_cli.py` | **Done** (PR #17) |
+| **Phase 3** | 5 | `test_snr_cli.py` | Not started |
+| **Phase 4** | 4 | `test_only_snr_cli.py`, `test_snr_scale.py` | Not started |
+| **Migrated** | **14** | | **14/24 (58%)** |
+| **Remaining** | **10** | | must-gather (1) + remediation (5) + standalone/scale (4) |
 
 ## Notes
 
