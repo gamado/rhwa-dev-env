@@ -560,3 +560,12 @@ These are not code rules but review workflow patterns:
 - Include Polarion links in PR description: `[OCP-XXXXX](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-XXXXX)`
 - Reply to each review comment with "Fixed in <commit>" and reference the fix
 - Before adding a new rule to this file: check if an existing rule already covers the same pattern -- merge, don't duplicate
+
+## Pre-Commit Review Steps
+
+Run these in order before committing code to the branch:
+
+1. `/review-checklist` -- checks all changed files against 48+ learned review rules
+2. **Reviewer agent** -- `Agent(subagent_type="reviewer")` on changed files for Ginkgo structure, safety-net cleanup, resource lifecycle, error handling
+3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files for duplication, naming, unused code, import hygiene
+4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
