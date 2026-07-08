@@ -569,3 +569,4 @@ Run these in order before committing code to the branch:
 2. **Reviewer agent** -- `Agent(subagent_type="reviewer")` on changed files for Ginkgo structure, safety-net cleanup, resource lifecycle, error handling
 3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files for duplication, naming, unused code, import hygiene
 4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
+5. **README update** -- if the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md` must be updated to match. Each test entry needs: numbered heading with Polarion link, description, Operators/Cluster/Environment/Standalone/Pass criteria fields
