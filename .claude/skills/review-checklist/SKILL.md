@@ -7,8 +7,8 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned:** PR #48 (2026-07-02)
-- **Total rules:** 48
+- **Last scanned:** PR #51 (2026-07-08)
+- **Total rules:** 50
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
 - **Data file:** `docs/system-tests-reviews-complete.json` (for reference only, not a runtime dependency)
@@ -549,6 +549,24 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 **Check:** Ginkgo concatenates `Describe` + `It` names into the full test name for JUnit. Long Describe names hurt CI dashboard readability. Keep them under ~60 characters.
 **Severity:** Minor
 **PRs:** #32
+
+#### R-49: README pass criteria must match actual test assertions
+**Check:** Each test's README pass criteria must list every assertion the test code performs, and nothing it doesn't. Common omissions: `suggested-namespace` annotation, container existence check from `ValidateNonRootSecurityContext`, container readiness (not just pod phase), `CreationTimestamp` unchanged verification.
+**Bad:**
+```markdown
+- **Pass criteria**: All pods Running, count matches expected replicas
+```
+**Good:**
+```markdown
+- **Pass criteria**: All pods Running with all containers ready, count matches expected replica count (1)
+```
+**Severity:** Minor
+**PRs:** #50, #51
+
+#### R-50: README annotation list must match code
+**Check:** When the README lists specific annotation names in pass criteria, the list must match the actual `RequiredAnnotations` map in the `*params` package. Don't copy from another operator's README -- check the code.
+**Severity:** Minor
+**PRs:** #51
 
 ---
 
