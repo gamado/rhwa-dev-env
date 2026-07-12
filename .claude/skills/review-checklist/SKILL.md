@@ -45,6 +45,8 @@ curl -s -H "Authorization: token $GH_TOKEN" \
 
 If no new merged PRs exist since last scan, skip silently and proceed to Review.
 
+**IMPORTANT:** Always run the actual curl command above -- never rely on cached results from a previous session. The "Last scanned" PR number in Metadata is the only source of truth for what has been processed.
+
 ## Review Algorithm
 
 1. Get changed files:
