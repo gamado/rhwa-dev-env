@@ -7,7 +7,7 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned:** PR #51 (2026-07-08)
+- **Last scanned merged_at:** 2026-07-08T13:18:46Z
 - **Total rules:** 50
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
@@ -22,14 +22,14 @@ Every `/review-checklist` invocation runs two steps automatically:
 
 ## Learn Algorithm
 
-1. Read "Last scanned" PR number from the Metadata section above
+1. Read "Last scanned merged_at" timestamp from the Metadata section above
 2. Fetch merged PRs since then:
 ```bash
 GH_TOKEN=$(cat ~/.github-token)
 curl -s -H "Authorization: token $GH_TOKEN" \
   "https://api.github.com/repos/medik8s/system-tests/pulls?state=closed&per_page=50&sort=created&direction=desc"
 ```
-3. Filter to PRs where `merged_at` is not null AND PR number > last scanned
+3. Filter to PRs where `merged_at` is not null AND `merged_at` > last scanned timestamp. This uses GitHub's UTC server clock (the `Z` suffix), so it works regardless of local timezone and catches PRs that merge out of PR-number order.
 4. For each new merged PR, fetch reviewer comments:
 ```bash
 curl -s -H "Authorization: token $GH_TOKEN" \
@@ -40,7 +40,7 @@ curl -s -H "Authorization: token $GH_TOKEN" \
    - Read ALL rules below
    - Does an existing rule cover this pattern? --> Add the PR number to that rule's PR refs
    - No existing rule matches? --> Create a new rule: next R-XX ID, description, bad/good code from the comment's diff context and the merged file, severity, PR ref
-7. Update "Last scanned" in Metadata above
+7. Update "Last scanned merged_at" in Metadata to the latest `merged_at` timestamp from the processed PRs (UTC, from GitHub API -- same clock as the filter in step 3)
 8. Edit this SKILL.md file with any changes
 
 If no new merged PRs exist since last scan, skip silently and proceed to Review.
