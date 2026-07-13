@@ -7,8 +7,8 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned merged_at:** 2026-07-08T13:18:46Z
-- **Total rules:** 50
+- **Last scanned merged_at:** 2026-07-13T07:41:25Z
+- **Total rules:** 51
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
 - **Data file:** `docs/system-tests-reviews-complete.json` (for reference only, not a runtime dependency)
@@ -84,8 +84,9 @@ DeferCleanup(func() { APIClient.Delete(ctx, obj) })
 DeferCleanup(func() { /* delete obj */ })
 Expect(APIClient.Create(ctx, obj)).To(Succeed())
 ```
+**Note:** PR #52 reviewer (ugreener) observed that registering DeferCleanup BEFORE Create causes unnecessary cleanup attempts when Create fails. The FAR pattern registers cleanup AFTER a successful Create. Both patterns are in use -- prefer AFTER Create for simple resources (pods), BEFORE Create for resources with complex side effects.
 **Severity:** Critical
-**PRs:** #10, #11, #26, #31, #32, #33, #34, #39
+**PRs:** #10, #11, #26, #31, #32, #33, #34, #39, #52
 
 #### R-02: Wrap Delete in Eventually
 **Check:** Any `APIClient.Delete()` in `AfterAll`, `DeferCleanup`, or cleanup functions must be wrapped in `Eventually` with a timeout. Bare Delete fails permanently on transient API errors.
@@ -122,7 +123,7 @@ Eventually(func() bool {
 Expect(APIClient.Create(ctx, newSBRC)).To(Succeed())
 ```
 **Severity:** Critical
-**PRs:** #26, #28, #32, #34
+**PRs:** #26, #28, #32, #34, #52
 
 #### R-04: Wait for DaemonSet GC after owner delete
 **Check:** After deleting an SBRC/NHC, poll with Eventually until the owned DaemonSet returns NotFound before proceeding. Leftover DaemonSets with watchdog locks cause EBUSY crash-loops.
@@ -423,7 +424,7 @@ Eventually(..., medik8sparams.DefaultTimeout, sbrparams.DefaultPollInterval)
 #### R-29: Extract shared helpers to tests/internal/
 **Check:** Common functions (`filterRunningPods`, `fetchActiveCSV`, `filterPodsByDeployment`, security context validation) must live in `tests/internal/helpers/`, not be copy-pasted per operator.
 **Severity:** Minor
-**PRs:** #9, #11, #17, #27, #28, #29, #32, #33, #34, #35, #37, #38
+**PRs:** #9, #11, #17, #27, #28, #29, #32, #33, #34, #35, #37, #38, #52
 
 ### Established Patterns
 
@@ -488,12 +489,12 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 #### R-36: Unique --focus strings per test
 **Check:** Each test must have a unique `--focus` pattern for standalone execution. Two tests sharing the same focus string always run together, defeating isolation.
 **Severity:** Minor
-**PRs:** #17
+**PRs:** #17, #52
 
 #### R-37: Use Context wrappers for Ginkgo grouping
 **Check:** Related `It` blocks should be wrapped in `Context` for better Ginkgo output grouping and JUnit readability.
 **Severity:** Minor
-**PRs:** #17, #28
+**PRs:** #17, #28, #52
 
 ### CI & Build Config
 
@@ -513,9 +514,9 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 **PRs:** #26
 
 #### R-41: Comments must match current code
-**Check:** When refactoring, update comments and docstrings to match the new behavior. Stale comments describing old API contracts (e.g., "returns empty string" when it now returns error) are misleading.
+**Check:** When refactoring, update comments and docstrings to match the new behavior. Stale comments describing old API contracts (e.g., "returns empty string" when it now returns error) are misleading. Also applies to stale test numbering references (e.g., "Test 11" when README says "Test 19").
 **Severity:** Minor
-**PRs:** #32, #34
+**PRs:** #32, #34, #52
 
 #### R-42: Diagnostic detail in error messages
 **Check:** Error messages must identify specific pod and container names, not just counts. "not ready: pod-a container-x" is better than "expected 3, got 1".
@@ -543,9 +544,9 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 **PRs:** #23
 
 #### R-47: Error match specificity
-**Check:** Don't match broad substrings like `"EOF"` in error strings -- it catches unrelated errors. Use the specific error type or a more precise substring.
+**Check:** Don't match broad substrings like `"EOF"` or `"timed out"` in error strings -- it catches unrelated errors. Use the specific error type or a more precise substring (e.g., `"oc debug on node X timed out"`).
 **Severity:** Major
-**PRs:** #23
+**PRs:** #23, #52
 
 #### R-48: Keep Describe block names concise
 **Check:** Ginkgo concatenates `Describe` + `It` names into the full test name for JUnit. Long Describe names hurt CI dashboard readability. Keep them under ~60 characters.
@@ -553,7 +554,7 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 **PRs:** #32
 
 #### R-49: README pass criteria must match actual test assertions
-**Check:** Each test's README pass criteria must list every assertion the test code performs, and nothing it doesn't. Common omissions: `suggested-namespace` annotation, container existence check from `ValidateNonRootSecurityContext`, container readiness (not just pod phase), `CreationTimestamp` unchanged verification.
+**Check:** Each test's README pass criteria must list every assertion the test code performs, and nothing it doesn't. Common omissions: `suggested-namespace` annotation, container existence check from `ValidateNonRootSecurityContext`, container readiness (not just pod phase), `CreationTimestamp` unchanged verification. Don't claim etcd health if the test doesn't check etcd.
 **Bad:**
 ```markdown
 - **Pass criteria**: All pods Running, count matches expected replicas
@@ -563,12 +564,26 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 - **Pass criteria**: All pods Running with all containers ready, count matches expected replica count (1)
 ```
 **Severity:** Minor
-**PRs:** #50, #51
+**PRs:** #50, #51, #52
 
 #### R-50: README annotation list must match code
 **Check:** When the README lists specific annotation names in pass criteria, the list must match the actual `RequiredAnnotations` map in the `*params` package. Don't copy from another operator's README -- check the code.
 **Severity:** Minor
 **PRs:** #51
+
+#### R-51: Disconnected-incompatible images in README Environment field
+**Check:** If a test uses a container image from a public registry (e.g., `registry.k8s.io/pause:3.9`), the README Environment field must say "Connected" not "Connected or disconnected". Public registry images are not available on disconnected clusters unless explicitly mirrored.
+**Bad:**
+```markdown
+- **Environment**: Connected or disconnected
+```
+when the test uses `registry.k8s.io/pause:3.9`
+**Good:**
+```markdown
+- **Environment**: Connected (pause image needs registry.k8s.io)
+```
+**Severity:** Minor
+**PRs:** #52
 
 ---
 
