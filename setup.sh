@@ -120,16 +120,19 @@ update_repo() {
 }
 
 # Sync Claude components (commands, skills, scripts, agents, etc.) from sub-repos
-# into the top-level .claude/ directory with {repo}-{name} prefixed symlinks.
+# into the top-level .claude/ directory with {repo}-{name} prefixed names.
 #
 # - Iterates all DIRECTORIES under each repos/*/.claude/ (future-proof)
 # - Naturally skips files like settings.json, settings.local.json
-# - Only removes symlinks during cleanup (preserves your own real files)
+# - Uses a .sync-manifest file per component dir to track synced items for cleanup
+# - Preserves original file extensions so Claude Code recognizes all component types
 # - Repo-name prefix prevents cross-repo naming conflicts
+# - Skills get a patched SKILL.md (name: prefixed) for correct autocomplete
 sync_claude_components() {
     log_info "Syncing Claude components from sub-repos..."
 
     local count=0
+    local manifest_suffix=".sync-manifest"
 
     # Iterate each repo that has a .claude/ directory
     for repo_claude in "$REPOS_DIR"/*/.claude/; do
@@ -146,18 +149,29 @@ sync_claude_components() {
             # Create matching top-level directory
             mkdir -p "$CLAUDE_DIR/$component"
 
-            # Remove stale synced items (symlinks and patched skill dirs)
-            find "$CLAUDE_DIR/$component" -maxdepth 1 -type l -name "${repo}-*.link" -delete
-            if [[ "$component" == "skills" ]]; then
-                for old_dir in "$CLAUDE_DIR/$component/${repo}-"*.link; do
-                    [[ -d "$old_dir" && ! -L "$old_dir" ]] && rm -rf "$old_dir"
-                done
-            fi
+            local manifest="$CLAUDE_DIR/$component/${repo}${manifest_suffix}"
 
-            # Symlink each item with repo prefix
-            # For skills: create a real directory with a patched SKILL.md (name: prefixed
-            # with repo) and symlink all other files. This ensures the skill's slash-command
-            # name matches the prefixed directory name for autocomplete.
+            # Remove previously synced items for this repo (from manifest)
+            if [[ -f "$manifest" ]]; then
+                while IFS= read -r old_item; do
+                    [[ -z "$old_item" ]] && continue
+                    local old_path="$CLAUDE_DIR/$component/$old_item"
+                    if [[ -L "$old_path" ]]; then
+                        rm -f "$old_path"
+                    elif [[ -d "$old_path" ]]; then
+                        rm -rf "$old_path"
+                    fi
+                done < "$manifest"
+                rm -f "$manifest"
+            fi
+            # Also clean up legacy .link items from previous sync format
+            find "$CLAUDE_DIR/$component" -maxdepth 1 -type l -name "${repo}-*.link" -delete
+            for old_dir in "$CLAUDE_DIR/$component/${repo}-"*.link; do
+                [[ -d "$old_dir" && ! -L "$old_dir" ]] && rm -rf "$old_dir"
+            done
+
+            # Sync each item with repo prefix, preserving original extensions
+            local new_manifest=""
             for item in "$component_dir"/*; do
                 [[ -e "$item" ]] || continue
                 local name
@@ -167,32 +181,34 @@ sync_claude_components() {
                 [[ "$name" == "README.md" ]] && continue
                 [[ "$name" == "OWNERS" ]] && continue
 
-                local link_name="${repo}-${name}.link"
-                local link_path="$CLAUDE_DIR/$component/$link_name"
+                local synced_name="${repo}-${name}"
+                local synced_path="$CLAUDE_DIR/$component/$synced_name"
 
                 if [[ "$component" == "skills" && -d "$item" && -f "$item/SKILL.md" ]]; then
                     # Skills: create real dir, patch SKILL.md name, symlink the rest
-                    rm -rf "$link_path"
-                    mkdir -p "$link_path"
-
-                    # Copy SKILL.md with name: field prefixed by repo
+                    rm -rf "$synced_path"
+                    mkdir -p "$synced_path"
                     local prefixed_name="${repo}-${name}"
-                    sed "s/^name: .*/name: ${prefixed_name}/" "$item/SKILL.md" > "$link_path/SKILL.md"
-
-                    # Symlink any other files in the skill directory
+                    sed "s/^name: .*/name: ${prefixed_name}/" "$item/SKILL.md" > "$synced_path/SKILL.md"
                     for subfile in "$item"/*; do
                         [[ -e "$subfile" ]] || continue
                         local subname
                         subname=$(basename "$subfile")
                         [[ "$subname" == "SKILL.md" ]] && continue
                         ln -sf "../../../repos/$repo/.claude/$component/$name/$subname" \
-                               "$link_path/$subname"
+                               "$synced_path/$subname"
                     done
                 else
-                    ln -sf "../../repos/$repo/.claude/$component/$name" "$link_path"
+                    ln -sf "../../repos/$repo/.claude/$component/$name" "$synced_path"
                 fi
+                new_manifest+="${synced_name}"$'\n'
                 count=$((count + 1))
             done
+
+            # Write manifest for future cleanup
+            if [[ -n "$new_manifest" ]]; then
+                printf '%s' "$new_manifest" > "$manifest"
+            fi
         done
     done
 
@@ -205,15 +221,22 @@ sync_claude_components() {
             [[ -d "$component_dir" ]] || continue
             local component
             component=$(basename "$component_dir")
-            local link_count
-            link_count=$(find "$component_dir" -maxdepth 1 -type l | wc -l)
-            if [[ $link_count -gt 0 ]]; then
-                echo -e "  ${GREEN}$component${NC}: $link_count items"
-                find "$component_dir" -maxdepth 1 -type l -printf "    %f\n" | sort
+            local synced_count=0
+            for m in "$component_dir"/*"$manifest_suffix"; do
+                [[ -f "$m" ]] || continue
+                synced_count=$((synced_count + $(wc -l < "$m")))
+            done
+            if [[ $synced_count -gt 0 ]]; then
+                echo -e "  ${GREEN}$component${NC}: $synced_count items"
+                for m in "$component_dir"/*"$manifest_suffix"; do
+                    [[ -f "$m" ]] || continue
+                    while IFS= read -r entry; do
+                        [[ -n "$entry" ]] && echo "    $entry"
+                    done < "$m"
+                done | sort
             fi
         done
     fi
-
 
     # Check for broken symlinks
     local broken

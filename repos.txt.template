@@ -20,4 +20,4 @@ https://github.com/medik8s/system-tests.git | system-tests | main
 https://github.com/medik8s/storage-based-remediation.git | storage-based-remediation | main
 
 # Prow CI infrastructure
-https://github.com/openshift/release.git | openshift-release | main
+https://github.com/openshift/release.git | release | main
