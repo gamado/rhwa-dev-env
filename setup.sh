@@ -146,10 +146,18 @@ sync_claude_components() {
             # Create matching top-level directory
             mkdir -p "$CLAUDE_DIR/$component"
 
-            # Remove stale symlinks in this component dir (only symlinks, not real files)
+            # Remove stale synced items (symlinks and patched skill dirs)
             find "$CLAUDE_DIR/$component" -maxdepth 1 -type l -name "${repo}-*.link" -delete
+            if [[ "$component" == "skills" ]]; then
+                for old_dir in "$CLAUDE_DIR/$component/${repo}-"*.link; do
+                    [[ -d "$old_dir" && ! -L "$old_dir" ]] && rm -rf "$old_dir"
+                done
+            fi
 
             # Symlink each item with repo prefix
+            # For skills: create a real directory with a patched SKILL.md (name: prefixed
+            # with repo) and symlink all other files. This ensures the skill's slash-command
+            # name matches the prefixed directory name for autocomplete.
             for item in "$component_dir"/*; do
                 [[ -e "$item" ]] || continue
                 local name
@@ -159,8 +167,30 @@ sync_claude_components() {
                 [[ "$name" == "README.md" ]] && continue
                 [[ "$name" == "OWNERS" ]] && continue
 
-                ln -sf "../../repos/$repo/.claude/$component/$name" \
-                       "$CLAUDE_DIR/$component/${repo}-${name}.link"
+                local link_name="${repo}-${name}.link"
+                local link_path="$CLAUDE_DIR/$component/$link_name"
+
+                if [[ "$component" == "skills" && -d "$item" && -f "$item/SKILL.md" ]]; then
+                    # Skills: create real dir, patch SKILL.md name, symlink the rest
+                    rm -rf "$link_path"
+                    mkdir -p "$link_path"
+
+                    # Copy SKILL.md with name: field prefixed by repo
+                    local prefixed_name="${repo}-${name}"
+                    sed "s/^name: .*/name: ${prefixed_name}/" "$item/SKILL.md" > "$link_path/SKILL.md"
+
+                    # Symlink any other files in the skill directory
+                    for subfile in "$item"/*; do
+                        [[ -e "$subfile" ]] || continue
+                        local subname
+                        subname=$(basename "$subfile")
+                        [[ "$subname" == "SKILL.md" ]] && continue
+                        ln -sf "../../../repos/$repo/.claude/$component/$name/$subname" \
+                               "$link_path/$subname"
+                    done
+                else
+                    ln -sf "../../repos/$repo/.claude/$component/$name" "$link_path"
+                fi
                 count=$((count + 1))
             done
         done
