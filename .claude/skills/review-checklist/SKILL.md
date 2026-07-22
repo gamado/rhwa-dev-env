@@ -7,8 +7,8 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned merged_at:** 2026-07-13T07:41:25Z
-- **Total rules:** 51
+- **Last scanned merged_at:** 2026-07-21T12:36:48Z
+- **Total rules:** 52
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
 - **Data file:** `docs/system-tests-reviews-complete.json` (for reference only, not a runtime dependency)
@@ -584,6 +584,31 @@ when the test uses `registry.k8s.io/pause:3.9`
 ```
 **Severity:** Minor
 **PRs:** #52
+
+#### R-52: Eventually in JustAfterEach stops remaining cleanup on timeout
+**Check:** `Eventually().Should(Succeed())` in `JustAfterEach` calls `Fail()` on timeout, which panics and stops executing the rest of the cleanup. Subsequent cleanup steps (FART deletion, node recovery) are skipped, leaving the cluster in a dirty state. Use `wait.PollUntilContextTimeout` with warning logging instead.
+**Bad:**
+```go
+JustAfterEach(func() {
+    Eventually(func() error { return client.Delete(...) }).Should(Succeed())
+    // These never run if Eventually above times out:
+    cleanupTemplate(...)
+    waitForNodeReady(...)
+})
+```
+**Good:**
+```go
+JustAfterEach(func() {
+    if waitErr := wait.PollUntilContextTimeout(...); waitErr != nil {
+        GinkgoWriter.Printf("Warning: cleanup timed out: %v\n", waitErr)
+    }
+    // Always runs:
+    cleanupTemplate(...)
+    waitForNodeReady(...)
+})
+```
+**Severity:** Critical
+**PRs:** #49
 
 ---
 
