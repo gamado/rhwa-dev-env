@@ -16,7 +16,11 @@ Migrate SNR E2E tests from the Python ocp-edge-auto framework to Go in medik8s/s
 ### Prep
 2. Pull latest main in `repos/system-tests` and latest in the Python source repo (`/home/kni/git/ocp-edge-auto`)
 3. Create a feature branch with a meaningful name (e.g. `feat/snr-phase2.1b-config-lifecycle`)
-4. Read the Python source tests from `/home/kni/git/ocp-edge-auto/edge_tests/management/cluster_life_cycle/` to understand what they validate
+4. Read the Python source tests from `/home/kni/git/ocp-edge-auto/edge_tests/management/cluster_life_cycle/` -- read the **full implementation**:
+   - The test method body (what it verifies)
+   - **Every helper function** the test calls (e.g. `stop_kubelet_on_node` uses SSH, not `oc debug`)
+   - The class `teardown_method` (recovery logic not in the Polarion plan)
+   - The Polarion test plan describes WHAT to verify; Python shows HOW. Follow both.
 
 ### Learn from history
 5. Read all merged and open PRs in the repo -- review comments that led to code fixes. Extract patterns and standards to follow. Do not limit to our own PRs -- read all of them.
