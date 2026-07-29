@@ -15,9 +15,20 @@
 # Shared tooling
 https://github.com/openshift-eng/two-node-toolbox.git | two-node-toolbox | main
 
-# Add RHWA repositories below:
-https://github.com/medik8s/system-tests.git | system-tests | main
+# medik8s repositories
+https://github.com/medik8s/common.git | common | main
+https://github.com/medik8s/customized-user-remediation.git | customized-user-remediation | main
+https://github.com/medik8s/docs.git | docs | gh-pages
+https://github.com/medik8s/fence-agents-remediation.git | fence-agents-remediation | main
+https://github.com/medik8s/machine-deletion-remediation.git | machine-deletion-remediation | main
+https://github.com/medik8s/must-gather.git | must-gather | main
+https://github.com/medik8s/node-healthcheck-operator.git | node-healthcheck-operator | main
+https://github.com/medik8s/node-maintenance-operator.git | node-maintenance-operator | main
+https://github.com/medik8s/node-remediation-console.git | node-remediation-console | main
+https://github.com/medik8s/self-node-remediation.git | self-node-remediation | main
 https://github.com/medik8s/storage-based-remediation.git | storage-based-remediation | main
+https://github.com/medik8s/system-tests.git | system-tests | main
+https://github.com/medik8s/tools.git | tools | main
 
 # Prow CI infrastructure
 https://github.com/openshift/release.git | release | main
