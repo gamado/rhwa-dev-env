@@ -623,9 +623,11 @@ These are not code rules but review workflow patterns:
 
 ## Pre-Commit Review Steps
 
-Run these in order before committing code to the branch:
+**MANDATORY: Run ALL steps every time. Never skip any step regardless of change size.**
+Skipping "because only one file changed" or "the reviewer already covers it" is NOT acceptable.
+Present all findings in tables and let the user decide what to fix before making changes.
 
-1. `/review-checklist` -- checks all changed files against 48+ learned review rules
+1. `/review-checklist` -- LEARN (fetch new merged PRs) + REVIEW (check all changed files against all rules)
 2. **Reviewer agent** -- `Agent(subagent_type="reviewer")` on changed files for Ginkgo structure, safety-net cleanup, resource lifecycle, error handling
 3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files for duplication, naming, unused code, import hygiene
 4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
