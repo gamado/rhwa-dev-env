@@ -7,7 +7,7 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned merged_at:** 2026-07-21T12:36:48Z
+- **Last scanned merged_at:** 2026-07-29T11:57:19Z
 - **Total rules:** 52
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
@@ -632,3 +632,9 @@ Present all findings in tables and let the user decide what to fix before making
 3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files for duplication, naming, unused code, import hygiene
 4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
 5. **README update** -- if the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md` must be updated to match. Each test entry needs: numbered heading with Polarion link, description, Operators/Cluster/Environment/Standalone/Pass criteria fields
+6. **CI test coverage** -- If the PR has a completed Prow CI run, run `/prow-investigate <PR>` and cross-reference:
+   - Extract all `reportxml.ID` values from changed Go files (the PR's Polarion IDs)
+   - Check each ID appears in the CI test results as **PASSED** (not SKIPPED or absent)
+   - If any PR test was **SKIPPED**: flag as **Critical** -- report which test, and the skip reason from the log (e.g. `Skip("SelfNodeRemediation CRD not found")` means the Prow job didn't co-install the required operator -- check the openshift/release job config for missing OPERATORS entries)
+   - If any PR test is **absent** from results: flag as **Critical** (test may not be wired into the ginkgo suite or label filter excluded it)
+   - A CI run where all existing tests pass but all NEW tests are skipped is a **false green** -- the PR's actual changes were never validated
