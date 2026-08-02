@@ -629,7 +629,11 @@ Present all findings in tables and let the user decide what to fix before making
 
 1. `/review-checklist` -- LEARN (fetch new merged PRs) + REVIEW (check all changed files against all rules)
 2. **Reviewer agent** -- `Agent(subagent_type="reviewer")` on changed files for Ginkgo structure, safety-net cleanup, resource lifecycle, error handling
-3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files for duplication, naming, unused code, import hygiene
+3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files. Single agent covering three areas:
+   - **Code quality**: duplication, naming conventions, unused code/constants, import hygiene
+   - **Codebase consistency**: read 2-3 existing test files from the same operator directory (or sibling operator), flag deviations in formatting, error handling style, blank line patterns
+   - **AI failure modes**: hallucinated APIs (calls/imports that don't exist), pattern drift (new code contradicting established codebase patterns), incomplete error handling (partial error paths that silently swallow failures), plausible-but-wrong logic, stale dependencies, abandoned scaffolding (TODOs, placeholders)
+   Steps 2 and 3 run in parallel.
 4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
 5. **README update** -- if the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md` must be updated to match. Each test entry needs: numbered heading with Polarion link, description, Operators/Cluster/Environment/Standalone/Pass criteria fields
 6. **CI test coverage** -- If the PR has a completed Prow CI run, run `/prow-investigate <PR>` and cross-reference:
