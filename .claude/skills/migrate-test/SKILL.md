@@ -76,17 +76,21 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
 
 6. **Read the class `teardown_method`** -- recovery logic not in the Polarion plan but essential for cluster stability
 
-7. **Produce a comparison table** for each test before writing code:
+7. **Produce a comparison table** including the **Polarion test plan** for each test:
 
    ```
-   | Step | Python | Go (planned) | Notes |
-   |------|--------|--------------|-------|
-   | Stop kubelet | SSH (paramiko) | StopKubeletSSH | Match |
-   | Start kubelet | SSH + daemon-reload | StartKubeletSSH | Match |
-   | Verify SNR not created | await timeout | Consistently 30s | Equivalent |
+   | # | Test Plan | Python | Go (planned) | Gap? |
+   |---|-----------|--------|--------------|------|
+   | 1 | Stop kubelet on worker | SSH | StopKubeletSSH | -- |
+   | 2 | Stop kubelet on CP node | SSH | StopKubeletSSH | -- |
+   | 3 | Verify controller failover | await pod restart | Eventually lease holder changed | -- |
    ```
 
-   Flag any gaps. The Polarion plan describes WHAT to verify; Python shows HOW.
+   **IMPORTANT**: Compare against the Polarion test plan, not just the Python.
+   The Python may have missed test plan steps (e.g. OCP-56600 remediationTemplate
+   edit was in the test plan but missing from Python). If you can't access
+   Polarion, ask the user to paste the test plan steps.
+   Flag any gaps in ALL three columns (test plan vs Python vs Go).
 
 ### Phase 3: Learn from history
 
