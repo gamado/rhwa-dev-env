@@ -1,0 +1,32 @@
+# RHWA Dev Environment Config
+# Copy this file to config.yaml and adjust values for your setup:
+#   cp config.yaml.template config.yaml
+#
+# Skills will read values from config.yaml automatically.
+# If a value is missing, Claude will ask and offer to save it.
+
+clusters:
+  srv-16:
+    host: nvd-srv-16.nvidia.eng.rdu2.redhat.com
+    arch: arm64
+    kubeconfig: /home/kni/clusterconfigs/auth/kubeconfig
+    remote_system_tests: /home/kni/git/rhwa-dev-env/repos/system-tests
+  # Add more clusters as needed:
+  # edge119:
+  #   host: ocp-edge119.lab.eng.tlv2.redhat.com
+  #   arch: x86
+  #   kubeconfig: /home/kni/clusterconfigs/auth/kubeconfig
+
+registries:
+  iib: registry-proxy.engineering.redhat.com/rh-osbs
+  iib_fallback: brew.registry.redhat.io/rh-osbs
+
+tokens:
+  github: ~/.github-token
+  jira: ~/.jira-token
+
+urls:
+  build_doc: https://docs.google.com/document/d/1c5xFWKs_NabZYWBwebhzp7-8hzNWDcp9tQsvqG0vfWI/edit
+  test_tutorial: https://docs.google.com/document/d/1E-arB0rzqZzWzI-T5EaKPdEtNRqZjv-xS-BWUB8-Ink/edit
+  gitlab_qe: https://gitlab.cee.redhat.com/ocp-edge-qe/ocp-edge-auto/
+  polarion: https://polarion.engineering.redhat.com/polarion/#/project/OSE
