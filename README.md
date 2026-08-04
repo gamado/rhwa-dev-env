@@ -17,6 +17,17 @@ Multi-repo workspace for Red Hat Workload Availability development.
 2. Run `./setup.sh clone`
 3. Update `CLAUDE.md` with repository descriptions
 
+## Config Setup
+
+Skills use a local config file for cluster hostnames, registry URLs, and token paths.
+
+```bash
+cp .claude/local/config.yaml.template .claude/local/config.yaml
+# Edit config.yaml with your values (or leave defaults for RHWA lab clusters)
+```
+
+On first use, skills will ask for any missing values and offer to save them.
+
 ## Claude Integration
 
 Claude commands, skills, scripts, and agents defined in sub-repos are automatically
