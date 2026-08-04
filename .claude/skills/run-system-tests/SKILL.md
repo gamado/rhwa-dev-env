@@ -36,7 +36,7 @@ description: Run medik8s/system-tests Go E2E tests against an OCP cluster. Suppo
 
 - Go 1.26+ installed (`/usr/local/go/bin` should be in PATH)
 - system-tests repo cloned at `repos/system-tests/` (in rhwa-dev-env workspace)
-- For remote execution (srv-16): `sshpass` installed, password `qum10net`
+- For remote execution: SSH key-based access to the target cluster (see CLAUDE.md "Config Resolution")
 - For local execution: kubeconfig with cluster-admin access
 
 ## Operator to Feature Mapping
@@ -73,9 +73,9 @@ export KUBECONFIG=<path>
 oc get nodes --no-headers | wc -l  # should return > 0
 ```
 
-For remote (srv-16):
+For remote clusters (resolve host from config):
 ```bash
-sshpass -p "qum10net" ssh root@nvd-srv-16.nvidia.eng.rdu2.redhat.com "go version"
+ssh root@<host> "go version"
 ```
 
 ### Step 3: Run tests
@@ -86,7 +86,7 @@ sshpass -p "qum10net" ssh root@nvd-srv-16.nvidia.eng.rdu2.redhat.com "go version
 export PATH=/usr/local/go/bin:$PATH
 export KUBECONFIG=<path>
 export ECO_TEST_FEATURES=<operator>-operator
-cd repos/system-tests   # or /home/kni/git/rhwa-dev-env/repos/system-tests
+cd repos/system-tests
 make run-tests
 ```
 
@@ -97,20 +97,20 @@ export ECO_TEST_VERBOSE=true
 
 #### Remote execution (srv-16)
 
-First sync latest test code to srv-16:
+First sync latest test code to the remote cluster (resolve host and paths from config):
 ```bash
 # Copy the specific operator test directory
-sshpass -p "qum10net" scp -r repos/system-tests/tests/<operator>-operator/ \
-  root@nvd-srv-16.nvidia.eng.rdu2.redhat.com:/home/kni/git/system-tests/tests/<operator>-operator/
+scp -r repos/system-tests/tests/<operator>-operator/ \
+  root@<host>:<remote-system-tests-path>/tests/<operator>-operator/
 ```
 
 Then run:
 ```bash
-sshpass -p "qum10net" ssh root@nvd-srv-16.nvidia.eng.rdu2.redhat.com \
+ssh root@<host> \
   "export PATH=/usr/local/go/bin:\$PATH && \
-   export KUBECONFIG=/home/kni/clusterconfigs/auth/kubeconfig && \
+   export KUBECONFIG=<kubeconfig-path> && \
    export ECO_TEST_FEATURES=<operator>-operator && \
-   cd /home/kni/git/system-tests && \
+   cd <remote-system-tests-path> && \
    make run-tests"
 ```
 
@@ -136,11 +136,10 @@ ls -la /tmp/reports/  # default report directory
 
 ## Known Cluster Targets
 
-| Name | Hostname | Kubeconfig | Arch | Access |
-|------|----------|-----------|------|--------|
-| srv-16 | nvd-srv-16.nvidia.eng.rdu2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | ARM64 | SSH only (run remotely) |
-| edge119 | ocp-edge119.lab.eng.tlv2.redhat.com | /home/kni/clusterconfigs/auth/kubeconfig | x86 | SSH or direct from edge servers |
-| AWS | varies | /tmp/aws-kubeconfig | x86 | Public API (works from anywhere) |
+Read cluster definitions from `.claude/local/config.yaml` (see CLAUDE.md "Config Resolution").
+Each cluster entry has: `host`, `arch`, `kubeconfig`, and optionally `auth` and `password`.
+
+For AWS (Cluster Bot) clusters, use the kubeconfig path directly instead of an alias.
 
 ## Common Issues
 

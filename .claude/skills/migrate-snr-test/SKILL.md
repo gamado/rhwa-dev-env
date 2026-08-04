@@ -14,9 +14,9 @@ Migrate SNR E2E tests from the Python ocp-edge-auto framework to Go in medik8s/s
 1. Identify the relevant Jira ticket(s) under RHWA-836 epic. Check if a sub-task exists for the tests being migrated. If not, suggest creating one and linking it properly.
 
 ### Prep
-2. Pull latest main in `repos/system-tests` and latest in the Python source repo (`/home/kni/git/ocp-edge-auto`)
+2. Pull latest main in `repos/system-tests` and latest in the Python source repo (ask user for location if not known)
 3. Create a feature branch with a meaningful name (e.g. `feat/snr-phase2.1b-config-lifecycle`)
-4. Read the Python source tests from `/home/kni/git/ocp-edge-auto/edge_tests/management/cluster_life_cycle/` -- read the **full implementation**:
+4. Read the Python source tests from `<python-source>/edge_tests/management/cluster_life_cycle/` -- read the **full implementation**:
    - The test method body (what it verifies)
    - **Every helper function** the test calls (e.g. `stop_kubelet_on_node` uses SSH, not `oc debug`)
    - The class `teardown_method` (recovery logic not in the Polarion plan)
@@ -33,7 +33,7 @@ Migrate SNR E2E tests from the Python ocp-edge-auto framework to Go in medik8s/s
 ### Verify
 9. Run lint and build checks. Ensure Go 1.26+ and golangci-lint are in PATH.
    ```bash
-   export PATH=/usr/local/go/bin:/home/kni/go/bin:$PATH
+   export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
    gofmt -l tests/snr-operator/
    make lint    # runs golangci-lint with repo's config -- catches unlambda, varnamelen, etc.
    go build ./tests/snr-operator/...
@@ -46,7 +46,7 @@ Migrate SNR E2E tests from the Python ocp-edge-auto framework to Go in medik8s/s
 
 ### Ship
 13. Commit to branch, push to `gamado` fork
-14. Create PR with description, Polarion ID hyperlinks (e.g. `[OCP-50770](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-50770)`), and test plan
+14. Create PR with description, Polarion ID hyperlinks (resolve Polarion base URL from config `urls.polarion`), and test plan
 15. Look up the correct Jira ticket, update it with the PR link, move to "In Review"
 
 ### Post-PR
@@ -54,15 +54,14 @@ Migrate SNR E2E tests from the Python ocp-edge-auto framework to Go in medik8s/s
 
 ## Key references
 
-- Python source: `/home/kni/git/ocp-edge-auto/edge_tests/management/cluster_life_cycle/`
+- Python source: ask user for ocp-edge-auto location (typically `edge_tests/management/cluster_life_cycle/`)
 - Go target: `repos/system-tests/tests/snr-operator/`
 - SNR params: `repos/system-tests/tests/snr-operator/internal/snrparams/`
-- Migration tracker: `/home/kni/git/rhwa-dev-env/snr-test-migration-tracker.md`
 - Jira epic: RHWA-836
 - SNR story: RHWA-1073
 - Git remote for push: `gamado`
-- GitHub API: use curl with `~/.github-token` (not gh CLI)
-- Jira API: use REST with `~/.jira-token`
+- GitHub API: use curl with token from config `tokens.github` (not gh CLI)
+- Jira API: use REST with token from config `tokens.jira`
 
 ## Coding patterns from merged PR reviews
 

@@ -25,7 +25,7 @@ Every `/review-checklist` invocation runs two steps automatically:
 1. Read "Last scanned merged_at" timestamp from the Metadata section above
 2. Fetch merged PRs since then:
 ```bash
-GH_TOKEN=$(cat ~/.github-token)
+GH_TOKEN=$(cat <github-token-path>)  # resolve path from config `tokens.github`
 curl -s -H "Authorization: token $GH_TOKEN" \
   "https://api.github.com/repos/medik8s/system-tests/pulls?state=closed&per_page=50&sort=created&direction=desc"
 ```
@@ -617,7 +617,7 @@ JustAfterEach(func() {
 These are not code rules but review workflow patterns:
 
 - Run `gofmt -w` before committing
-- Include Polarion links in PR description: `[OCP-XXXXX](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-XXXXX)`
+- Include Polarion links in PR description: `[OCP-XXXXX](<polarion-base-url>/workitem?id=OCP-XXXXX)` (resolve base URL from config `urls.polarion`)
 - Reply to each review comment with "Fixed in <commit>" and reference the fix
 - Before adding a new rule to this file: check if an existing rule already covers the same pattern -- merge, don't duplicate
 

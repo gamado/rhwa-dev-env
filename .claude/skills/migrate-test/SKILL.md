@@ -38,8 +38,9 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
    - Check Jira MCP or REST API for sub-tasks with Polarion IDs
    ```bash
    # Fetch Jira ticket details
-   curl -s -H "Authorization: Bearer $(cat ~/.jira-token)" \
-     "https://api.atlassian.com/ex/jira/2b9e35e3/rest/api/3/issue/RHWA-XXXX"
+   curl -s -H "Authorization: Bearer $(cat <jira-token-path>)" \
+     "https://api.atlassian.com/ex/jira/<cloud-id>/rest/api/3/issue/RHWA-XXXX"
+   # Resolve token path from config `tokens.jira`, cloud ID from config
    ```
 
 2. **Update Jira to "In Progress"** -- transition the ticket and add a comment:
@@ -58,7 +59,7 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
 3. **For each Polarion ID**, find and read the FULL Python implementation:
 
    ```bash
-   grep -rn "<POLARION_ID>" /home/kni/git/ocp-edge-auto/edge_tests/
+   grep -rn "<POLARION_ID>" <python-source>/edge_tests/  # ask user for ocp-edge-auto location
    ```
 
 4. **Read the test method body** -- what it verifies, in what order
@@ -70,9 +71,9 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
    - `apply_nhc_external_remediation_resources` -> YAML-based CRD/RBAC setup
 
    Common helpers live in:
-   - `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/nodes.py` -- kubelet ops, node status
-   - `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/ssh.py` -- SSH mechanism
-   - `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/node_health_checks.py` -- NHC/SNR helpers
+   - `<python-source>/edge_infra/ocp/utils/nodes.py` -- kubelet ops, node status
+   - `<python-source>/edge_infra/ocp/utils/ssh.py` -- SSH mechanism
+   - `<python-source>/edge_infra/ocp/utils/node_health_checks.py` -- NHC/SNR helpers
 
 6. **Read the class `teardown_method`** -- recovery logic not in the Polarion plan but essential for cluster stability
 
@@ -130,7 +131,7 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
 
 14. **Build and lint**:
     ```bash
-    export PATH=/usr/local/go/bin:/home/kni/go/bin:$PATH
+    export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
     go build ./tests/<operator>-operator/...
     go vet ./tests/<operator>-operator/...
     gofmt -l tests/<operator>-operator/
@@ -192,15 +193,15 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
 
 | Resource | Path / URL |
 |----------|-----------|
-| Python source | `/home/kni/git/ocp-edge-auto/edge_tests/management/cluster_life_cycle/` |
-| Python helpers (nodes) | `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/nodes.py` |
-| Python helpers (SSH) | `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/ssh.py` |
-| Python helpers (NHC) | `/home/kni/git/ocp-edge-auto/edge_infra/ocp/utils/node_health_checks.py` |
+| Python source | `<python-source>/edge_tests/management/cluster_life_cycle/` (ask user for ocp-edge-auto location) |
+| Python helpers (nodes) | `<python-source>/edge_infra/ocp/utils/nodes.py` |
+| Python helpers (SSH) | `<python-source>/edge_infra/ocp/utils/ssh.py` |
+| Python helpers (NHC) | `<python-source>/edge_infra/ocp/utils/node_health_checks.py` |
 | Go target | `repos/system-tests/tests/<operator>-operator/` |
 | Shared Go helpers | `repos/system-tests/tests/internal/helpers/` |
 | Git remote for push | `gamado` |
-| GitHub API | `curl` with `~/.github-token` (not gh CLI) |
-| Jira API | REST with `~/.jira-token`, CloudID `2b9e35e3` |
+| GitHub API | `curl` with token from config `tokens.github` (not gh CLI) |
+| Jira API | REST with token from config `tokens.jira` |
 | Review checklist | `/review-checklist` |
 | CI investigation | `/prow-investigate <PR>` |
 | Cluster health | `/check-cluster srv-16` or `/check-cluster edge119` |

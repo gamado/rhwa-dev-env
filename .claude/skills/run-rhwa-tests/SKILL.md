@@ -17,19 +17,19 @@ Run the RHWA QE automation suite (ocp-edge-auto) against an OpenShift cluster. T
 
 ## Prerequisites
 
-- SSH access to the cluster host (e.g., `root@ocp-edge{N}.lab.eng.tlv2.redhat.com`)
+- SSH access to the cluster host (resolve hostname from config `clusters.<name>.host`)
 - RHWA operators deployed in `openshift-workload-availability` namespace (use `deploy-rhwa` skill)
-- ocp-edge-auto zip file (download from https://gitlab.cee.redhat.com/ocp-edge-qe/ocp-edge-auto/)
+- ocp-edge-auto zip file (download URL from config `urls.gitlab_qe`)
 - Python 3.9+ and `virtualenv` on the cluster host
 
 ## Step 1: Copy Test Framework to Cluster Host
 
 ```bash
 # Extract locally
-unzip /home/gamado/Downloads/ocp-edge-auto-master.zip -d /tmp/
+unzip <path-to-ocp-edge-auto-zip> -d /tmp/
 
-# Copy to cluster host
-scp -r /tmp/ocp-edge-auto-master root@ocp-edge{N}.lab.eng.tlv2.redhat.com:/root/ocp-edge-auto
+# Copy to cluster host (resolve host from config)
+scp -r /tmp/ocp-edge-auto-master root@<host>:/root/ocp-edge-auto
 ```
 
 ## Step 2: Create vms_definitions.json
@@ -67,7 +67,7 @@ The `bmc_v4address` should be `host:port` extracted from the BMC address URL (no
 ## Step 3: Copy install-config.yaml
 
 ```bash
-cp /home/kni/clusterconfigs/install-config.yaml /root/install-config.yaml
+cp <kubeconfig-dir>/install-config.yaml /root/install-config.yaml
 ```
 
 ## Step 4: Set Up Python Environment
@@ -83,7 +83,7 @@ pip install netifaces  # missing from requirements.txt
 ## Step 5: Export Environment Variables
 
 ```bash
-export KUBECONFIG=/home/kni/clusterconfigs/auth/kubeconfig
+export KUBECONFIG=<kubeconfig-path>  # resolve from config
 export ASSISTED_INSTALLER=false
 export SNO=false
 export ENVIRONMENT=Virtual  # or "Baremetal" for real BM

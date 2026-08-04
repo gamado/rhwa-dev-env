@@ -28,7 +28,7 @@ Investigate Prow CI job failures (or verify passing runs) for medik8s/system-tes
 ### Step 1: Get PR and CI status
 
 ```bash
-GH_TOKEN=$(cat ~/.github-token)
+GH_TOKEN=$(cat <github-token-path>)  # resolve path from config `tokens.github`
 
 # Get PR details (head SHA, branch, status)
 curl -s -H "Authorization: token $GH_TOKEN" \

@@ -35,6 +35,34 @@ All repositories use a fork model for contributions unless noted otherwise:
 - Push changes to your personal fork first, not directly to upstream
 - Create pull requests from your fork to the upstream repository
 
+## Config Resolution
+
+Config file: `.claude/local/config.yaml` (gitignored, auto-populated by skills)
+
+When any skill needs infrastructure details (cluster hostnames, kubeconfig paths,
+registry URLs, token file paths, internal URLs), check `.claude/local/config.yaml` first.
+If a needed value is missing, ask the user and offer to save it for next time.
+
+Skills must never contain hardcoded hostnames, passwords, or local paths.
+SSH key-based auth is recommended. If SSH keys are not set up, the user may
+optionally store a password in config (not recommended).
+
+Supported keys:
+
+    clusters.<name>.host        -- FQDN of the cluster server
+    clusters.<name>.arch        -- arm64 or x86
+    clusters.<name>.kubeconfig  -- path to kubeconfig on that server
+    clusters.<name>.auth        -- "ssh-key" (default) or "sshpass"
+    clusters.<name>.password    -- only if auth=sshpass (not recommended)
+    registries.iib              -- IIB registry base URL
+    registries.iib_fallback     -- fallback IIB registry URL
+    tokens.github               -- path to GitHub token file
+    tokens.jira                 -- path to Jira token file
+    urls.polarion               -- Polarion base URL
+    urls.build_doc              -- build location doc URL
+    urls.test_tutorial          -- testing team tutorial URL
+    urls.gitlab_qe              -- QE automation repo URL
+
 ---
 
 ## Repositories

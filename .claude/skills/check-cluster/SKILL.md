@@ -16,18 +16,15 @@ description: Quick health check of an OCP cluster. Shows nodes, cluster version,
 - **target** (optional): Which cluster to check. Default: use current `KUBECONFIG`.
   - Omitted or `local` — use `KUBECONFIG` env var
   - Path to kubeconfig — e.g. `/tmp/aws-kubeconfig`
-  - `srv-16` — check nvd-srv-16 via SSH
-  - `edge119` — check ocp-edge119 via SSH
-  - `edge128` — check ocp-edge128 via SSH
-  - `edge<N>` — check ocp-edge{N}.lab.eng.tlv2.redhat.com via SSH
+  - `<cluster-alias>` — check a configured cluster via SSH (resolve from config)
 
 ### Examples
 
 ```
 /check-cluster                     → check cluster using current KUBECONFIG
 /check-cluster /tmp/aws-kubeconfig → check AWS cluster
-/check-cluster srv-16              → check nvd-srv-16 ARM64 cluster
-/check-cluster edge119             → check edge119 cluster
+/check-cluster srv-16              → check srv-16 cluster via SSH (resolved from config)
+/check-cluster edge119             → check edge119 cluster via SSH (resolved from config)
 ```
 
 ## Implementation
@@ -40,8 +37,7 @@ Based on target argument:
 |--------|--------------|------------|
 | `local` / omitted | Direct `oc` | `$KUBECONFIG` or `~/.kube/config` |
 | `/path/to/kubeconfig` | Direct `oc` with `KUBECONFIG=<path>` | As specified |
-| `srv-16` | SSH: `sshpass -p "qum10net" ssh root@nvd-srv-16.nvidia.eng.rdu2.redhat.com` | `/home/kni/clusterconfigs/auth/kubeconfig` |
-| `edge<N>` | SSH: `ssh -o StrictHostKeyChecking=no root@ocp-edge<N>.lab.eng.tlv2.redhat.com` | `/home/kni/clusterconfigs/auth/kubeconfig` |
+| `<cluster-alias>` | SSH: `ssh root@<host>` (resolve host from config `clusters.<alias>.host`) | Resolve from config `clusters.<alias>.kubeconfig` |
 
 ### Step 2: Run health checks
 
@@ -95,9 +91,7 @@ Flag any issues:
 
 ## Known Clusters
 
-| Name | Hostname | Arch | Location |
-|------|----------|------|----------|
-| srv-16 | nvd-srv-16.nvidia.eng.rdu2.redhat.com | ARM64 | RDU (Nvidia lab) |
-| edge119 | ocp-edge119.lab.eng.tlv2.redhat.com | x86 | TLV lab |
-| edge128 | ocp-edge128.lab.eng.tlv2.redhat.com | x86 | TLV lab |
-| AWS | varies (Cluster Bot) | x86 | AWS us-east-2 |
+Read cluster definitions from `.claude/local/config.yaml` (see CLAUDE.md "Config Resolution").
+Each cluster entry has: `host`, `arch`, `kubeconfig`, and optionally `auth` and `password`.
+
+For AWS (Cluster Bot) clusters, use the kubeconfig path directly instead of an alias.

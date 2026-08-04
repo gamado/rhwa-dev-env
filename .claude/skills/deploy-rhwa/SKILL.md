@@ -47,7 +47,7 @@ description: Deploy RHWA operators on an OCP cluster. Supports deploying all or 
 ## Prerequisites
 
 - `KUBECONFIG` set or `oc` access to the target cluster
-- For IIB source: cluster must reach `registry-proxy.engineering.redhat.com` (RH VPN/lab) or `brew.registry.redhat.io`
+- For IIB source: cluster must reach the IIB registry (resolve from config `registries.iib` and `registries.iib_fallback`)
 - For GA source: cluster must reach `registry.redhat.io` (public, works from AWS/anywhere)
 
 ## Implementation Steps
@@ -104,7 +104,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: registry-proxy.engineering.redhat.com/rh-osbs/iib:<NUMBER>
+  image: <iib-registry>/iib:<NUMBER>  # resolve registry from config `registries.iib`
   displayName: RHWA IIB
   publisher: Red Hat
 ```
@@ -115,7 +115,7 @@ Wait for catalog pod to be ready:
 oc wait --for=condition=Ready pod -l olm.catalogSource=rhwa-catalog -n openshift-marketplace --timeout=120s
 ```
 
-If the pod has `ImagePullBackOff`, try `brew.registry.redhat.io/rh-osbs/iib:<NUMBER>` instead.
+If the pod has `ImagePullBackOff`, try the fallback registry from config `registries.iib_fallback`.
 
 ### Step 4: Extract and apply IDMS (IIB mode only)
 
@@ -190,7 +190,7 @@ Report the results in a summary table:
 
 | Problem | Fix |
 |---------|-----|
-| CatalogSource pod `ImagePullBackOff` | Cluster can't reach `registry-proxy`. Use `brew.registry.redhat.io` or switch to `ga` source |
+| CatalogSource pod `ImagePullBackOff` | Cluster can't reach the IIB registry. Try `registries.iib_fallback` from config, or switch to `ga` source |
 | Operator pod `ImagePullBackOff` (IIB mode) | IDMS not applied or missing a mapping. Check `oc get idms` |
 | CSV stuck in `Installing` | Check operator pod logs: `oc logs -n openshift-workload-availability <pod>` |
 | OperatorGroup conflict | Delete existing OperatorGroup: `oc delete og -n openshift-workload-availability --all` then recreate |
@@ -260,6 +260,6 @@ spec:
 
 ## References
 
-- Build location doc: https://docs.google.com/document/d/1c5xFWKs_NabZYWBwebhzp7-8hzNWDcp9tQsvqG0vfWI/edit
-- Testing team tutorial: https://docs.google.com/document/d/1E-arB0rzqZzWzI-T5EaKPdEtNRqZjv-xS-BWUB8-Ink/edit
+- Build location doc: resolve from config `urls.build_doc`
+- Testing team tutorial: resolve from config `urls.test_tutorial`
 - Quay repos: https://quay.io/organization/redhat-user-workloads (search `rhwa-tenant`)

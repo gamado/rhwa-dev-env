@@ -1,6 +1,53 @@
-# RHWA Remediation Test Coverage Report
+# RHWA Go Test Migration Status Report
 
 Generated: 2026-07-22
+
+## Overall Progress
+
+| Priority | Implemented | Total | Percent |
+|----------|-------------|-------|---------|
+| P0 - Post-Deployment | 33 | 33 | 100% |
+| P1 - Remediation | 18 | 29 | 62% |
+| P2 - Config/Negative | 11 | 37 | 30% |
+| **Overall** | **62** | **99** | **63%** |
+
+## P0 - Post-Deployment / Operator Readiness
+
+| Operator | Done | Total | Status | Details |
+|----------|------|-------|--------|---------|
+| SNR | 4 | 4 | Done | pod running, CSV, replicas, security |
+| FAR | 9 | 9 | Done | pod running, CSV, replicas, security, CRDs, labels, fence agents |
+| MDR | 4 | 4 | Done | pod running, CSV, replicas, security |
+| NHC | 4 | 4 | Done | pod running, CSV, replicas, security |
+| SBR | 8 | 8 | Done | pod running, CSV, replicas, security, naming, schema, watchdog, detect-only |
+| NMO | 4 | 4 | Done | pod running, CSV, replicas, security |
+| **Total** | **33** | **33** | | |
+
+## P1 - Remediation / Destructive Testing
+
+| Operator | Done | Total | Status | PR | Details |
+|----------|------|-------|--------|-----|---------|
+| SNR | 5 | 5 | Done | #52 | worker+master kubelet stop, strategies, taint, eviction |
+| FAR | 5 | 5 | Done | #49 | AWS fence agent, taint, eviction, leader fencing |
+| MDR | 1 | 2 | Done | #53 | NHC-triggered Machine deletion + conditions. Remaining: standalone MDR (RHWA-1348) |
+| SBR | 7 | 12 | Partial | -- | Maxim: node hang, NHC integration, split-brain, storage loss x3, transient. Stashed: 5 standalone (RHWA-1051, needs ODF/NFS) |
+| NHC | 0 | 5 | WIP | -- | RHWA-1243, branch ready, minHealthy fix applied. Remaining: 7 escalation (RHWA-1245) |
+| NMO | 0 | 0 | N/A | -- | NMO is maintenance, not remediation |
+| **Total** | **18** | **29** | | | |
+
+## P2 - Config / Negative / Lifecycle Testing
+
+| Operator | Done | Total | Status | Details |
+|----------|------|-------|--------|---------|
+| SNR | 8 | 8 | Done | CRD negative, config lifecycle, conditions, unsupported strategy |
+| FAR | 1 | 1 | Done | controller lifecycle |
+| MDR | 0 | 5 | Not started | negative scenarios, conditions (RHWA-1249) |
+| SBR | 2 | 2 | Done | SBRC lifecycle, metrics |
+| NHC | 0 | 12 | Not started | negative (RHWA-1244), escalation (RHWA-1245), templates (RHWA-1246), must-gather (RHWA-1247) |
+| NMO | 0 | 9 | Not started | maintenance lifecycle (RHWA-1250), negative (RHWA-1251), pod eviction + SNR interop (RHWA-1252) |
+| **Total** | **11** | **37** | | |
+
+---
 
 ## Summary
 
