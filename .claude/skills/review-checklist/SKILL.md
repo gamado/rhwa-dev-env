@@ -7,7 +7,7 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 
 ## Metadata
 
-- **Last scanned merged_at:** 2026-07-29T11:57:19Z
+- **Last scanned merged_at:** 2026-08-05T17:40:20Z
 - **Total rules:** 52
 - **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
 - **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
@@ -585,6 +585,40 @@ when the test uses `registry.k8s.io/pause:3.9`
 **Severity:** Minor
 **PRs:** #52
 
+#### R-53: Migration code must match Python mechanism, not just logic
+**Check:** When porting from Python to Go, the Go code must use the same underlying mechanism as the Python, not just produce the same visible result. Common mismatches:
+- Python `del obj['key']` removes a field -- Go equivalent is JSON merge patch with `null`, NOT setting to `""` (empty string persists in the API server)
+- Python `invoke_ssh_on_the_node` uses SSH -- Go must use SSH too (not `oc debug`) when kubelet is stopped
+- Python `create_api_object` may do server-side apply -- Go `APIClient.Create` does create-only (different conflict behavior)
+**Bad:**
+```go
+// Python uses: del nhc_cr['spec']['remediationTemplate']['namespace']
+// Go WRONG: sets empty string instead of removing the field
+patch := []byte(`{"spec":{"remediationTemplate":{"namespace":""}}}`)
+```
+**Good:**
+```go
+// Python uses: del nhc_cr['spec']['remediationTemplate']['namespace']
+// Go CORRECT: null removes the key per RFC 7396
+patch := []byte(`{"spec":{"remediationTemplate":{"namespace":null}}}`)
+```
+**Severity:** Critical
+**PRs:** #59
+
+#### R-54: No internal rule references in code comments
+**Check:** Code comments must not reference internal review rule IDs (R-01, R-28, etc.) from the review-checklist skill. These IDs are meaningful only inside the skill file and opaque to anyone reading the code. Instead, explain the *reason* directly.
+**Bad:**
+```go
+// Both kept in one It block to avoid duplicating reportxml.ID (R-28).
+```
+**Good:**
+```go
+// Both kept in one It block to avoid duplicating reportxml.ID --
+// duplicate IDs cause one Polarion result to overwrite the other.
+```
+**Severity:** Minor
+**PRs:** #59
+
 #### R-52: Eventually in JustAfterEach stops remaining cleanup on timeout
 **Check:** `Eventually().Should(Succeed())` in `JustAfterEach` calls `Fail()` on timeout, which panics and stops executing the rest of the cleanup. Subsequent cleanup steps (FART deletion, node recovery) are skipped, leaving the cluster in a dirty state. Use `wait.PollUntilContextTimeout` with warning logging instead.
 **Bad:**
@@ -634,7 +668,33 @@ Present all findings in tables and let the user decide what to fix before making
    - **Codebase consistency**: read 2-3 existing test files from the same operator directory (or sibling operator), flag deviations in formatting, error handling style, blank line patterns
    - **AI failure modes**: hallucinated APIs (calls/imports that don't exist), pattern drift (new code contradicting established codebase patterns), incomplete error handling (partial error paths that silently swallow failures), plausible-but-wrong logic, stale dependencies, abandoned scaffolding (TODOs, placeholders)
    Steps 2 and 3 run in parallel.
-4. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
+4. **Adversarial reviewer** -- `Agent(subagent_type="reviewer")` with an explicit adversarial prompt. This is the most important step. It catches issues the author is blind to because they wrote the code AND ran steps 1-3.
+
+   **The adversarial agent MUST:**
+
+   a. **Run LEARN first** -- fetch newly merged PRs since last scan (same as step 1 LEARN). The adversarial agent needs the latest rules from reviewer comments that may have been added between step 1 and step 4.
+
+   b. **Go through ALL rules (R-01 through R-XX)** one by one, producing a full table with Pass/Fail/Suspicious for each. This is not optional -- every rule must be checked explicitly.
+
+   c. **Apply rules by their GENERAL INTENT, not by checking for a specific known pattern.** This is the key difference from step 1. Examples of what "general intent" means:
+      - R-23 (use constants) means ANY repeated string that appears 3+ times, not just CR names and timeouts. Error reason strings, annotation keys, label values -- all count.
+      - R-29 (extract helpers) means ANY duplicated code block, including INTRA-FILE duplication (same 5-line block repeated 4 times within one file), not just cross-file helper extraction.
+      - R-20 (BeforeAll readiness) means trace which tests depend on which operators. If ANY test uses a template from operator X, the BeforeAll must check operator X is installed.
+      - R-42 (diagnostic detail) means ALL error paths, including helper function error returns -- not just test assertion messages.
+      - R-27 (labels) means check whether labels that are IDENTICAL across all It blocks should be moved to the Describe/Context level to avoid repetition.
+
+   d. **Assume steps 1-3 marked things as "Pass" incorrectly** -- challenge every "Pass" from prior steps.
+
+   e. **Reference past PR mistakes** -- list the specific categories from past PRs (PR #59: OCP-prefix, bool-not-tuple, missing retry, blast radius, builder duplication; PR #70: intra-file duplication, missing operator dependency, repeated string literals, bare errors in helpers, redundant labels on It).
+
+   f. **Compare against sibling operator test files** (e.g., snr crd_negative.go, far_destructive.go) for pattern divergence.
+
+   g. **Verify Python-to-Go migration matches the Python MECHANISM** (R-53).
+
+   h. **Check cross-file resource conflicts** (shared CRDs, global state).
+
+   This step MUST use a separate agent, not the same one from steps 2-3, so it has no confirmation bias from prior analysis.
+5. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
 5. **README update** -- if the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md` must be updated to match. Each test entry needs: numbered heading with Polarion link, description, Operators/Cluster/Environment/Standalone/Pass criteria fields
 6. **CI test coverage** -- If the PR has a completed Prow CI run, run `/prow-investigate <PR>` and cross-reference:
    - Extract all `reportxml.ID` values from changed Go files (the PR's Polarion IDs)

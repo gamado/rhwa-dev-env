@@ -97,21 +97,24 @@ export ECO_TEST_VERBOSE=true
 
 #### Remote execution (srv-16)
 
-First sync latest test code to the remote cluster (resolve host and paths from config):
+First sync latest test code to the remote cluster (resolve host and paths from config).
+Use rsync (not scp) to ensure the entire repo is in sync, including helpers and params:
 ```bash
-# Copy the specific operator test directory
-scp -r repos/system-tests/tests/<operator>-operator/ \
-  root@<host>:<remote-system-tests-path>/tests/<operator>-operator/
+rsync -az --delete repos/system-tests/ \
+  root@<host>:<remote-system-tests-path>/ 2>&1
 ```
 
-Then run:
+Then run using a heredoc to avoid SSH quoting issues.
+**IMPORTANT:** Always use `ssh host << 'REMOTE'` (heredoc), never quoted single-line
+`ssh host "cmd1 && cmd2"` -- the quoting breaks with nested quotes and variable expansion:
 ```bash
-ssh root@<host> \
-  "export PATH=/usr/local/go/bin:\$PATH && \
-   export KUBECONFIG=<kubeconfig-path> && \
-   export ECO_TEST_FEATURES=<operator>-operator && \
-   cd <remote-system-tests-path> && \
-   make run-tests"
+ssh root@<host> << 'REMOTE'
+cd <remote-system-tests-path>
+export PATH=/usr/local/go/bin:$PATH
+export KUBECONFIG=<kubeconfig-path>
+export ECO_TEST_FEATURES=<operator>-operator
+make run-tests
+REMOTE
 ```
 
 ### Step 4: Report results
