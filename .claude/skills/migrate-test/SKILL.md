@@ -43,13 +43,7 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
    # Resolve token path from config `tokens.jira`, cloud ID from config
    ```
 
-2. **Update Jira to "In Progress"** -- transition the ticket and add a comment:
-   ```
-   Starting migration of <operator> tests: <list of Polarion IDs>
-   Reading Python reference implementation from ocp-edge-auto.
-   ```
-
-3. **List Polarion IDs** to migrate. For each ID, record:
+2. **List Polarion IDs** to migrate. For each ID, record:
    - Test name from Polarion
    - Python test method name (search for the ID in ocp-edge-auto)
    - Whether it's destructive (stops kubelet, reboots nodes) or non-destructive
@@ -110,7 +104,13 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
     git checkout -b feat/<operator>-<description>
     ```
 
-11. **Write Go tests** following these rules:
+11. **Suggest updating Jira to "In Progress"** -- after the first test is implemented,
+    suggest to the user to transition the Jira ticket and offer to add a comment:
+    ```
+    Starting migration of <operator> tests: <list of Polarion IDs>
+    ```
+
+12. **Write Go tests** following these rules:
     - Match the Python kubelet stop/start mechanism (SSH or oc debug -- read the Python helpers to determine which)
     - If Python uses SSH: use `helpers.StopKubeletSSH` / `helpers.StartKubeletSSH`
     - `StartKubeletSSH` includes `daemon-reload` (matches Python's `start_kubelet_on_node`)
@@ -121,9 +121,9 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
     - Every `It` block needs: `reportxml.ID`, granular labels, unique focus string
     - Match the Python flow step-for-step. If the Python does something the Go doesn't, that's a gap to fill
 
-12. **Add constants** to `<operator>params/const.go`
+13. **Add constants** to `<operator>params/const.go`
 
-13. **Update README** with new test entries (R-49):
+14. **Update README** with new test entries (R-49):
     - Polarion hyperlink, description, operators, cluster, environment, standalone command, pass criteria
     - Pass criteria must list EVERY assertion the code performs
 
@@ -161,12 +161,16 @@ Migrate RHWA E2E tests from the Python ocp-edge-auto framework to Go in medik8s/
     - Body: Polarion ID hyperlinks, test descriptions, test plan
     - Reference the Jira ticket
 
-20. **Update Jira to "In Review"** -- add a comment with the PR link:
+20. **Suggest updating Jira to "Dev Complete"** -- after PR creation, suggest to the
+    user to transition the Jira ticket (transition ID 51, "Dev Complete") and offer
+    to add a comment with the PR link:
     ```
     PR created: https://github.com/medik8s/system-tests/pull/<N>
     Tests: <list of Polarion IDs>
     CI status: <passing/pending>
     ```
+    Note: RHWA Jira workflow has no "In Review" status. "Dev Complete" means
+    development done, awaiting validation -- the closest match for PR submitted.
 
 21. **Trigger CI** and verify with `/prow-investigate`:
     ```

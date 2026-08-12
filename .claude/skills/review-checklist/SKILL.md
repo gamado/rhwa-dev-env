@@ -8,9 +8,9 @@ description: Self-learning review checklist for medik8s/system-tests. Learns fro
 ## Metadata
 
 - **Last scanned merged_at:** 2026-08-05T17:40:20Z
-- **Total rules:** 52
-- **Source:** 256 review comments from 37 merged PRs (initial), auto-updated
-- **Reviewers:** ugreener (114), gamado (75), razo7 (44), maximunited (26), clobrano (7)
+- **Total rules:** 60
+- **Source:** 256 review comments from 37 merged PRs (initial), auto-updated from PRs #61, #62, #70, #72
+- **Reviewers:** ugreener (124), gamado (75), razo7 (55), maximunited (26), clobrano (7)
 - **Data file:** `docs/system-tests-reviews-complete.json` (for reference only, not a runtime dependency)
 
 ## How It Works
@@ -218,37 +218,64 @@ pods, err := pod.List(client, ns, metav1.ListOptions{
 
 ### Error Handling
 
-#### R-10: Never discard errors from API calls
-**Check:** Never use `_, err :=` and ignore the result, or `pods, _ := pod.List(...)`. An error causes an empty result, making subsequent assertions vacuously pass.
+#### R-10: Never discard errors from any function call
+**Check:** Never use `_, err :=` and ignore the result, or `pods, _ := pod.List(...)`. An error causes an empty result, making subsequent assertions vacuously pass. This applies to ALL function calls that return errors -- not just Kubernetes API calls. Helper functions (e.g., `helpers.RunOnNode`), exec calls, and utility functions all count. Even when an error is "expected" (e.g., SSH connection drops during reboot), the error must be captured, inspected, and either asserted or logged -- never silently discarded with `_`.
 **Bad:**
 ```go
 pods, _ := pod.List(client, ns, listOpts)
 Expect(len(pods)).To(Equal(3))
+
+// Also bad: discarding error from helper function
+helpers.RunOnNode(ctx, nodeName, timeout, "systemctl", "reboot")
+// RunOnNode returns (string, error) but error is silently lost
 ```
 **Good:**
 ```go
 pods, err := pod.List(client, ns, listOpts)
 Expect(err).ToNot(HaveOccurred())
 Expect(len(pods)).To(Equal(3))
+
+// Good: capture and handle expected errors explicitly
+_, err := helpers.RunOnNode(ctx, nodeName, timeout, "systemctl", "reboot")
+// Reboot drops the connection, so a specific error is expected
+if err != nil && !isConnectionDropError(err) {
+    Expect(err).ToNot(HaveOccurred(), "unexpected error during reboot of %s", nodeName)
+}
 ```
 **Severity:** Major
-**PRs:** #15, #17, #34, #39
+**PRs:** #15, #17, #34, #39, #62
 
 #### R-11: Distinguish IsNotFound from transient errors / fail closed
 **Check:** When checking if a resource exists, distinguish `IsNotFound` (genuine absence) from transient API errors. Functions like `isCRDInstalled` must fail closed: return `false` for ALL errors (not just NotFound). Unknown errors must not be treated as "CRD installed" -- that fails open and causes misleading test runs.
+
+**Also applies inside Eventually/Consistently blocks:** When polling for resource absence (e.g., "wait until CR is gone"), use `func() (bool, error)` not `func() bool`. Returning `false` for all errors inside `func() bool` silently retries transient errors (RBAC failures, network timeouts, API overload) until the Eventually timeout, masking the real problem. The `(bool, error)` signature causes Eventually to fail immediately on unexpected errors.
 **Bad:**
 ```go
 _, err := client.Get(ctx, key, obj)
 if err != nil { return false } // treats ALL errors as "not found"
+
+// Also bad: inside Eventually, masks transient errors as "still exists"
+Eventually(func() bool {
+    err := APIClient.Get(ctx, client.ObjectKey{Name: name}, obj)
+    return k8serrors.IsNotFound(err) // RBAC error? Network timeout? All treated as "not gone yet"
+}).Should(BeTrue())
 ```
 **Good:**
 ```go
 _, err := client.Get(ctx, key, obj)
 if k8serrors.IsNotFound(err) { return false }
 if err != nil { log.Warn("unexpected error"); return false } // fail closed
+
+// Good: inside Eventually, fail fast on unexpected errors
+Eventually(func() (bool, error) {
+    err := APIClient.Get(ctx, client.ObjectKey{Name: name}, obj)
+    if k8serrors.IsNotFound(err) { return true, nil }
+    if err != nil { return false, err } // fail fast
+    return false, nil // still exists
+}).Should(BeTrue())
 ```
 **Severity:** Major
-**PRs:** #29, #33, #34, #39
+**PRs:** #29, #33, #34, #39, #72
 
 #### R-12: Expect(err.Error()) panics when err is nil
 **Check:** `Expect(err.Error())` panics with `ContinueOnFailure` when `err` is nil. Use `Expect(err).To(MatchError(...))` instead.
@@ -362,10 +389,35 @@ if isSNO {
 **Severity:** Major
 **PRs:** #13, #26, #27, #28, #29, #34, #39
 
-#### R-20: BeforeAll readiness check per Describe
+#### R-20: Operator dependency checks -- Describe-level AND per-It
 **Check:** Each `Describe` block that depends on an operator must include its own `BeforeAll` readiness check. When tests are run via Ginkgo label filtering, other Describe blocks' BeforeAll does not execute.
-**Severity:** Minor
-**PRs:** #17, #26
+
+**Additionally:** Trace the operator dependencies of EACH individual `It` block, not just the Describe. A Describe may check that operator A (e.g., NHC) is installed, but an individual It block inside it may use a template/CRD from operator B (e.g., SNRT from SNR). That It block must check `isBCRDInstalled()` and `Skip()` if absent. Without this, running on a cluster without operator B produces a confusing assertion failure instead of a clean skip.
+**Bad:**
+```go
+Describe("NHC Negative", Label(labels.OperatorNHC), func() {
+    BeforeAll(func() {
+        // Only checks NHC is installed
+        nhcDep, err := deployment.Pull(APIClient, nhcparams.OperatorDeploymentName, ...)
+        Expect(err).ToNot(HaveOccurred())
+    })
+    It("OCP-71184 -- missing namespace in SNRT-based NHC", func() {
+        // USES SelfNodeRemediationTemplate but never checks if SNR is installed!
+        // Fails with "NHC should become Enabled" instead of Skip
+    })
+})
+```
+**Good:**
+```go
+It("OCP-71184 -- missing namespace in SNRT-based NHC", func() {
+    if !isSNRCRDInstalled(ctx) {
+        Skip("SelfNodeRemediation CRD not found -- OCP-71184 requires SNRT")
+    }
+    // ... test using SNRT
+})
+```
+**Severity:** Major
+**PRs:** #17, #26, #70, #72
 
 #### R-21: Assert target node does NOT exist before using CR name
 **Check:** Non-destructive tests using `CR.metadata.name` as target node name must assert the node does NOT exist first. A cluster with a matching node name would trigger real fencing.
@@ -379,23 +431,45 @@ if isSNO {
 
 ### Naming & Constants
 
-#### R-23: Use named constants from *params packages
+#### R-23: Use named constants from *params packages / extract repeated literals
 **Check:** Use constants from `sbrparams`, `snrparams`, `farparams`, `medik8sparams` instead of hardcoded strings and durations. Use existing variables (e.g., `operatorNs`) instead of re-declaring. Use typed constants like `corev1.NodeReady` instead of raw strings `"Ready"`.
-**Severity:** Minor
-**PRs:** #8, #16, #17, #20, #26, #28, #29, #33, #34, #43
 
-#### R-24: Use medik8sparams.DefaultTimeout
-**Check:** Use `medik8sparams.DefaultTimeout` (300s) for `Eventually` timeouts, not hardcoded `30*time.Second` or other values.
+**Additionally:** Any string literal or status/reason value that appears 3 or more times in a file (or 2+ times across files) MUST be extracted to a named constant in the appropriate `*params/const.go`. This includes error reason strings, annotation keys, label values, phase names, and condition types -- not just CR names and timeouts.
+**Bad:**
+```go
+// "RemediationTemplateNotFound" appears 4 times in the file
+Expect(reason).To(ContainSubstring("RemediationTemplateNotFound"))
+// ... 3 more identical occurrences
+```
+**Good:**
+```go
+// In nhcparams/const.go:
+NHCReasonTemplateNotFound = "RemediationTemplateNotFound"
+
+// In test file:
+Expect(reason).To(ContainSubstring(nhcparams.NHCReasonTemplateNotFound))
+```
+**Severity:** Minor
+**PRs:** #8, #16, #17, #20, #26, #28, #29, #33, #34, #43, #70
+
+#### R-24: No hardcoded durations -- use named constants
+**Check:** Use `medik8sparams.DefaultTimeout` (300s) for `Eventually` timeouts, not hardcoded `30*time.Second` or other values. This rule applies to ALL duration values, not just `Eventually` timeouts -- including timeouts passed to helper functions (`helpers.RunOnNode(ctx, node, 2*time.Minute, ...)`), `time.Sleep` calls, and any other place a duration appears. If all other timeouts in a file use `*params` constants, a hardcoded `2*time.Minute` sticks out and should be a constant too.
 **Bad:**
 ```go
 Eventually(..., 30*time.Second, 5*time.Second)
+
+// Also bad: hardcoded timeout in helper call when all other timeouts use constants
+helpers.RunOnNode(ctx, nodeName, 2*time.Minute, "systemctl", "reboot")
 ```
 **Good:**
 ```go
 Eventually(..., medik8sparams.DefaultTimeout, sbrparams.DefaultPollInterval)
+
+// Good: named constant in *params/const.go
+helpers.RunOnNode(ctx, nodeName, nmoparams.RunOnNodeTimeout, "systemctl", "reboot")
 ```
 **Severity:** Minor
-**PRs:** #13, #16, #18, #28, #29, #31, #34, #39
+**PRs:** #13, #16, #18, #28, #29, #31, #34, #39, #62
 
 #### R-25: Remove unused constants
 **Check:** Remove constants defined but never referenced. Dead code creates drift risk if operator values change.
@@ -409,10 +483,30 @@ Eventually(..., medik8sparams.DefaultTimeout, sbrparams.DefaultPollInterval)
 
 ### Labels & CI
 
-#### R-27: Granular Ginkgo labels on every It block
+#### R-27: Granular Ginkgo labels -- required on every It, deduplicated to Describe
 **Check:** Every `It` block must have: `labels.TierSmoke` (or TierAcceptance), `labels.DisruptionNonDestructive` (or Destructive), `labels.PlatformAny`, `labels.Frequency*`, component labels, AND operator labels (`labels.OperatorSNR`, `labels.OperatorFAR`, etc.).
+
+**Additionally:** When ALL It blocks within a Describe/Context share identical labels (e.g., all have `DisruptionNonDestructive, FrequencyWeekly`), those shared labels MUST be moved to the Describe/Context-level `Label()` call and removed from each It. This ensures any future test added inherits them automatically and avoids redundant repetition. Check sibling Describe blocks in the same package for established patterns.
+**Bad:**
+```go
+Describe("NHC Negative", Label(labels.OperatorNHC), func() {
+    It("test 1", Label(labels.DisruptionNonDestructive, labels.FrequencyWeekly, ...), ...)
+    It("test 2", Label(labels.DisruptionNonDestructive, labels.FrequencyWeekly, ...), ...)
+    It("test 3", Label(labels.DisruptionNonDestructive, labels.FrequencyWeekly, ...), ...)
+    // Same labels repeated on every It
+})
+```
+**Good:**
+```go
+Describe("NHC Negative",
+    Label(labels.OperatorNHC, labels.DisruptionNonDestructive, labels.FrequencyWeekly),
+    func() {
+    It("test 1", Label(labels.TierSmoke, ...), ...) // only It-specific labels
+    It("test 2", Label(labels.TierAcceptance, ...), ...)
+})
+```
 **Severity:** Minor
-**PRs:** #13, #17, #19, #37, #43
+**PRs:** #13, #17, #19, #37, #43, #70
 
 #### R-28: reportxml.ID for Polarion tracking
 **Check:** Every `It` block with a Polarion test case must have `reportxml.ID("NNNNN")`. Do NOT reuse IDs across different It blocks -- duplicates cause one result to overwrite the other.
@@ -421,10 +515,47 @@ Eventually(..., medik8sparams.DefaultTimeout, sbrparams.DefaultPollInterval)
 
 ### Code Duplication
 
-#### R-29: Extract shared helpers to tests/internal/
+#### R-29: Extract shared helpers / eliminate all duplication
 **Check:** Common functions (`filterRunningPods`, `fetchActiveCSV`, `filterPodsByDeployment`, security context validation) must live in `tests/internal/helpers/`, not be copy-pasted per operator.
+
+**This rule covers THREE forms of duplication, all of which must be checked:**
+
+1. **Cross-file duplication:** The same function appears in two operator directories. Extract to `tests/internal/helpers/`.
+
+2. **Intra-file duplication:** The same multi-line code block (3+ lines) appears 2 or more times within ONE file. This is the most commonly missed form. Look for identical `Eventually` blocks, identical assertion sequences, identical setup/teardown patterns within a single file. Extract to a local helper function.
+**Bad:**
+```go
+// Block repeated 4 times in the same file:
+Expect(waitForNHCPhase(ctx, nhcName, "Disabled", timeout)).To(Succeed())
+Eventually(func(g Gomega) {
+    reason, err := getNHCReason(ctx, nhcName)
+    g.Expect(err).ToNot(HaveOccurred())
+    g.Expect(reason).To(ContainSubstring("RemediationTemplateNotFound"))
+}).WithPolling(interval).WithTimeout(timeout).Should(Succeed())
+```
+**Good:**
+```go
+// Extracted to a helper function:
+verifyNHCDisabledWithReason(ctx, nhcName, nhcparams.NHCReasonTemplateNotFound, timeout)
+```
+
+3. **Near-duplicate / structural duplication:** Multiple functions have identical structure but differ only in one parameter (e.g., field name, type). Extract a generic parameterized function and make each original a one-line wrapper.
+**Bad:**
+```go
+func getNHCPhase(ctx, name) (string, error)     { /* fetch NHC, extract status.phase */ }
+func getNHCReason(ctx, name) (string, error)     { /* fetch NHC, extract status.reason */ }
+func getNHCObservedNodes(ctx, name) (int64, error) { /* fetch NHC, extract status.observedNodes */ }
+func getNHCHealthyNodes(ctx, name) (int64, error)  { /* fetch NHC, extract status.healthyNodes */ }
+// 4 functions with identical structure, ~50 lines of duplication
+```
+**Good:**
+```go
+func getNHCStatusString(ctx, name, field string) (string, error) { /* generic */ }
+func getNHCStatusInt64(ctx, name, field string) (int64, error) { /* generic */ }
+func getNHCPhase(ctx, name) (string, error) { return getNHCStatusString(ctx, name, "phase") }
+```
 **Severity:** Minor
-**PRs:** #9, #11, #17, #27, #28, #29, #32, #33, #34, #35, #37, #38, #52
+**PRs:** #9, #11, #17, #27, #28, #29, #32, #33, #34, #35, #37, #38, #52, #70, #72
 
 ### Established Patterns
 
@@ -518,10 +649,29 @@ if len(errs) > 0 { Fail(strings.Join(errs, "; ")) }
 **Severity:** Minor
 **PRs:** #32, #34, #52
 
-#### R-42: Diagnostic detail in error messages
-**Check:** Error messages must identify specific pod and container names, not just counts. "not ready: pod-a container-x" is better than "expected 3, got 1".
+#### R-42: Diagnostic detail in ALL error paths
+**Check:** Error messages and error returns must include enough context to diagnose what went wrong. This applies to ALL error paths, not just test assertions:
+
+1. **Test assertions:** Must identify specific pod and container names, not just counts. "not ready: pod-a container-x" is better than "expected 3, got 1".
+2. **Helper function error returns:** Must wrap errors with context using `fmt.Errorf("operation on %s: %w", name, err)`. A bare `return "", err` from a helper function produces an opaque error when Eventually times out. The wrapping must identify WHICH resource (CR name, node name, field name) was being accessed.
+**Bad:**
+```go
+func getNHCReason(ctx context.Context, name string) (string, error) {
+    if err := APIClient.Get(ctx, key, obj); err != nil {
+        return "", err // bare error -- which NHC? what operation?
+    }
+}
+```
+**Good:**
+```go
+func getNHCReason(ctx context.Context, name string) (string, error) {
+    if err := APIClient.Get(ctx, key, obj); err != nil {
+        return "", fmt.Errorf("getting NHC %s reason: %w", name, err)
+    }
+}
+```
 **Severity:** Major
-**PRs:** #43
+**PRs:** #43, #70
 
 #### R-43: nil vs empty map consistency
 **Check:** Use `map[string]interface{}{}` (empty map), not `nil`, when calling helpers like `buildSBRC`. Consistent with all other call sites.
@@ -644,6 +794,137 @@ JustAfterEach(func() {
 **Severity:** Critical
 **PRs:** #49
 
+### Type Safety & Go Idioms
+
+#### R-55: Use checked type assertions, not bare assertions
+**Check:** Never use bare (unchecked) Go type assertions like `x.(map[string]interface{})` in test code. If the assertion fails at runtime, it panics with an unhelpful stack trace. Use the two-value form `val, ok := x.(Type)` with a Ginkgo assertion on `ok`, or extract a typed helper function that does checked assertions.
+
+This is especially common when working with `unstructured.Unstructured` objects, where spec/status fields are `interface{}`.
+**Bad:**
+```go
+spec := nhc.Object["spec"].(map[string]interface{})
+conditions := spec["unhealthyConditions"].([]interface{})
+cond := conditions[0].(map[string]interface{})
+// Any of these panics if the structure doesn't match
+```
+**Good:**
+```go
+func nhcSpec(nhc *unstructured.Unstructured) map[string]interface{} {
+    GinkgoHelper()
+    spec, ok := nhc.Object["spec"].(map[string]interface{})
+    Expect(ok).To(BeTrue(), "NHC object has no map spec")
+    return spec
+}
+// Usage: spec := nhcSpec(nhc)
+```
+**General intent:** Any `.(Type)` in the diff without the `, ok` two-value form is a violation. This includes nested assertions inside loops and deeply chained accesses.
+**Severity:** Major
+**PRs:** #72
+
+#### R-56: Match sibling Describe decorators for consistency
+**Check:** When adding a new `Describe` block to a package that already has existing Describes, match the decorator list (Serial, Ordered, ContinueOnFailure, etc.) for consistency. Different decorator lists within the same package cause confusing behavior differences and signal that the author didn't review existing patterns.
+
+Check sibling `*_test.go` or `*.go` files in the same package directory for established patterns.
+**Bad:**
+```go
+// Existing Describe in nhc_remediation_trigger.go:
+Describe("NHC Remediation", Serial, Ordered, ContinueOnFailure, ...)
+
+// New Describe in nhc_negative_validation.go:
+Describe("NHC Negative", Serial, Ordered, ...) // Missing ContinueOnFailure
+```
+**Good:**
+```go
+// Match the established pattern:
+Describe("NHC Negative", Serial, Ordered, ContinueOnFailure, ...)
+```
+**Severity:** Minor
+**PRs:** #72
+
+### Documentation & Environment
+
+#### R-57: Document required environment variables in README
+**Check:** When adding a runtime requirement for an environment variable (especially `panic()` or `log.Fatal()` on missing env var), the variable must be documented in the relevant README's environment or prerequisites section. Runtime-only error messages are not discoverable by users reading setup docs. If the README already documents the variable, no change is needed -- but verify.
+**Bad:**
+```go
+// Code panics if WORKLOAD_IMAGE is not set, but README doesn't mention it
+panic("WORKLOAD_IMAGE env var is required")
+```
+**Good:**
+```markdown
+## Environment Variables
+| Variable | Required | Description |
+|---|---|---|
+| `WORKLOAD_IMAGE` | Yes | Container image for test workload pods. In Prow CI... |
+```
+**Severity:** Minor
+**PRs:** #61
+
+### Namespace & Resource Isolation
+
+#### R-58: Do not create test resources in the default namespace
+**Check:** Tests must not create pods, ConfigMaps, or other resources in the `default` namespace. Use a dedicated test namespace (e.g., `medik8sparams.OperatorNs` or a test-specific namespace) to avoid collisions with other workloads, parallel test suites, or restrictive RBAC policies on the default namespace.
+**Bad:**
+```go
+pod := &corev1.Pod{
+    ObjectMeta: metav1.ObjectMeta{
+        Name:      "test-workload",
+        Namespace: "default", // or no namespace specified (defaults to "default")
+    },
+}
+```
+**Good:**
+```go
+pod := &corev1.Pod{
+    ObjectMeta: metav1.ObjectMeta{
+        Name:      "test-workload",
+        Namespace: nmoparams.TestNamespace, // or medik8sparams.OperatorNs
+    },
+}
+```
+**Severity:** Minor
+**PRs:** #62
+
+### Migration & Coverage
+
+#### R-59: Compare new test coverage against operator source e2e
+**Check:** When writing system tests for an operator, compare the test coverage against the operator's OWN e2e test suite (usually in the operator's source repo, e.g., `node-maintenance-operator/test/e2e/`). Flag significant coverage gaps as review comments. Common gaps:
+
+- **Webhook validation:** Duplicate CR rejection, immutable field patching
+- **Kubernetes events:** Operator-emitted events (BeginMaintenance, SucceedMaintenance, RemovedMaintenance)
+- **Taints and leases:** Operator-managed taints (e.g., `medik8s.io/drain` NoSchedule), maintenance lease creation/validation/cleanup
+- **Drain behavior:** Workload drain/migration to other nodes, drain timeout handling
+- **Status fields:** CR status transitions and status field validation
+
+Not all source e2e tests need to be ported to system tests (some are unit-level), but the reviewer should document which source behaviors are intentionally omitted and why.
+**Severity:** Minor
+**PRs:** #62
+
+#### R-60: Use GinkgoHelper() or WithOffset in helper assertion functions
+**Check:** Helper functions that call `Expect()`, `Eventually()`, or other Ginkgo assertions directly must either call `GinkgoHelper()` at the top (Ginkgo v2+) or use `ExpectWithOffset(1, ...)` / `EventuallyWithOffset(1, ...)`. Without this, assertion failures report the file/line of the helper function, not the caller -- making it hard to identify which test failed.
+**Bad:**
+```go
+func deleteAndWaitForResource(ctx context.Context, name string) {
+    Expect(APIClient.Delete(ctx, obj)).To(Succeed())
+    // Failure points here, not at the call site
+    Eventually(func() bool {
+        return k8serrors.IsNotFound(APIClient.Get(ctx, key, obj))
+    }).Should(BeTrue())
+}
+```
+**Good:**
+```go
+func deleteAndWaitForResource(ctx context.Context, name string) {
+    GinkgoHelper() // All failures report at the caller's location
+    Expect(APIClient.Delete(ctx, obj)).To(Succeed())
+    Eventually(func() bool {
+        return k8serrors.IsNotFound(APIClient.Get(ctx, key, obj))
+    }).Should(BeTrue())
+}
+```
+**Severity:** Minor
+**PRs:** #62
+
 ---
 
 ## PR Process Reminders
@@ -658,47 +939,110 @@ These are not code rules but review workflow patterns:
 ## Pre-Commit Review Steps
 
 **MANDATORY: Run ALL steps every time. Never skip any step regardless of change size.**
-Skipping "because only one file changed" or "the reviewer already covers it" is NOT acceptable.
 Present all findings in tables and let the user decide what to fix before making changes.
 
-1. `/review-checklist` -- LEARN (fetch new merged PRs) + REVIEW (check all changed files against all rules)
-2. **Reviewer agent** -- `Agent(subagent_type="reviewer")` on changed files for Ginkgo structure, safety-net cleanup, resource lifecycle, error handling
-3. **Code Analyzer agent** -- `Agent(subagent_type="code-analyzer")` on changed files. Single agent covering three areas:
-   - **Code quality**: duplication, naming conventions, unused code/constants, import hygiene
-   - **Codebase consistency**: read 2-3 existing test files from the same operator directory (or sibling operator), flag deviations in formatting, error handling style, blank line patterns
-   - **AI failure modes**: hallucinated APIs (calls/imports that don't exist), pattern drift (new code contradicting established codebase patterns), incomplete error handling (partial error paths that silently swallow failures), plausible-but-wrong logic, stale dependencies, abandoned scaffolding (TODOs, placeholders)
-   Steps 2 and 3 run in parallel.
-4. **Adversarial reviewer** -- `Agent(subagent_type="reviewer")` with an explicit adversarial prompt. This is the most important step. It catches issues the author is blind to because they wrote the code AND ran steps 1-3.
+### Step 1: Launch 3 review agents in ONE message
 
-   **The adversarial agent MUST:**
+**CRITICAL: Send exactly ONE message containing exactly 3 `Agent` tool calls.**
+Do NOT launch agents one at a time. Do NOT run reviews inline with grep/bash.
+One message, three Agent calls, all parallel. No exceptions.
 
-   a. **Run LEARN first** -- fetch newly merged PRs since last scan (same as step 1 LEARN). The adversarial agent needs the latest rules from reviewer comments that may have been added between step 1 and step 4.
+Each agent runs in ISOLATION -- no session context, no awareness of the other agents
+or who wrote the code. The prompt must be fully self-contained: repo path, branch name,
+how to find changed files, what to check, and how to report. Every agent must be told
+to be aggressive, suspicious, and assume the code has bugs.
 
-   b. **Go through ALL rules (R-01 through R-XX)** one by one, producing a full table with Pass/Fail/Suspicious for each. This is not optional -- every rule must be checked explicitly.
+**Agent A: Dynamic Learning Reviewer** -- `Agent(subagent_type="reviewer", run_in_background=true)`
 
-   c. **Apply rules by their GENERAL INTENT, not by checking for a specific known pattern.** This is the key difference from step 1. Examples of what "general intent" means:
-      - R-23 (use constants) means ANY repeated string that appears 3+ times, not just CR names and timeouts. Error reason strings, annotation keys, label values -- all count.
-      - R-29 (extract helpers) means ANY duplicated code block, including INTRA-FILE duplication (same 5-line block repeated 4 times within one file), not just cross-file helper extraction.
-      - R-20 (BeforeAll readiness) means trace which tests depend on which operators. If ANY test uses a template from operator X, the BeforeAll must check operator X is installed.
-      - R-42 (diagnostic detail) means ALL error paths, including helper function error returns -- not just test assertion messages.
-      - R-27 (labels) means check whether labels that are IDENTICAL across all It blocks should be moved to the Describe/Context level to avoid repetition.
+This is the only agent that knows our learned rules from past PR reviews.
 
-   d. **Assume steps 1-3 marked things as "Pass" incorrectly** -- challenge every "Pass" from prior steps.
+Prompt must be self-contained and include:
+- Repository path and branch name
+- How to find changed files: `git diff --name-only main...HEAD`
+- LEARN instructions: fetch newly merged PRs since `<last-scanned-timestamp>` (from Metadata
+  section above). Use `curl` with GitHub token at `~/.github-token`. For each new merged PR,
+  fetch review comments, filter bots (`coderabbitai[bot]`, `qodo-*`, `openshift-ci*`), check
+  if any comment introduces a pattern not covered by the rules. Report any new rules found.
+- The full list of rules R-01 through R-XX (copy all rule IDs and their one-line descriptions
+  into the prompt so the agent has them without needing to read this file)
+- Instruction: go through EVERY rule as a general guideline. Scan the code for the INTENT
+  behind each rule, not specific known patterns. Do not grep for examples from the rule --
+  read the code and judge whether the rule's intent is violated.
+- Read 2-3 sibling test files from the same operator directory for pattern comparison.
+- Be aggressive: flag anything that looks wrong, don't give benefit of the doubt.
+- Report format: Rule ID | Severity | File:Line | Issue | Recommendation
 
-   e. **Reference past PR mistakes** -- list the specific categories from past PRs (PR #59: OCP-prefix, bool-not-tuple, missing retry, blast radius, builder duplication; PR #70: intra-file duplication, missing operator dependency, repeated string literals, bare errors in helpers, redundant labels on It).
+**Agent B: Code Analyzer** -- `Agent(subagent_type="code-analyzer", run_in_background=true)`
 
-   f. **Compare against sibling operator test files** (e.g., snr crd_negative.go, far_destructive.go) for pattern divergence.
+General-purpose aggressive code reviewer. No awareness of our learned rules.
 
-   g. **Verify Python-to-Go migration matches the Python MECHANISM** (R-53).
+Prompt must be self-contained and include:
+- Repository path and branch name
+- How to find changed files: `git diff --name-only main...HEAD`
+- Read ALL changed files fully. Read 2-3 existing test files from the same operator
+  directory (or sibling operator) for comparison.
+- You are an aggressive code reviewer. Assume the code was written by an AI coding agent
+  that makes mistakes. Assume the code has bugs until proven otherwise.
+- Check: duplication (intra-file AND cross-file), naming conventions, unused code/constants,
+  import hygiene, error handling completeness, codebase consistency (formatting, style,
+  blank line patterns vs sibling files), hallucinated APIs (verify imports and function calls
+  exist in the vendor directory), pattern drift (new code contradicting established codebase
+  patterns), incomplete error handling, plausible-but-wrong logic, abandoned scaffolding.
+- Report format: Category | Severity | File:Line | Issue | Recommendation
 
-   h. **Check cross-file resource conflicts** (shared CRDs, global state).
+**Agent C: Adversarial Reviewer** -- `Agent(subagent_type="reviewer", run_in_background=true)`
 
-   This step MUST use a separate agent, not the same one from steps 2-3, so it has no confirmation bias from prior analysis.
-5. `go build ./...` + `go vet ./...` + `gofmt -l` -- must all pass clean
-5. **README update** -- if the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md` must be updated to match. Each test entry needs: numbered heading with Polarion link, description, Operators/Cluster/Environment/Standalone/Pass criteria fields
-6. **CI test coverage** -- If the PR has a completed Prow CI run, run `/prow-investigate <PR>` and cross-reference:
-   - Extract all `reportxml.ID` values from changed Go files (the PR's Polarion IDs)
-   - Check each ID appears in the CI test results as **PASSED** (not SKIPPED or absent)
-   - If any PR test was **SKIPPED**: flag as **Critical** -- report which test, and the skip reason from the log (e.g. `Skip("SelfNodeRemediation CRD not found")` means the Prow job didn't co-install the required operator -- check the openshift/release job config for missing OPERATORS entries)
-   - If any PR test is **absent** from results: flag as **Critical** (test may not be wired into the ginkgo suite or label filter excluded it)
-   - A CI run where all existing tests pass but all NEW tests are skipped is a **false green** -- the PR's actual changes were never validated
+General-purpose aggressive code reviewer. No awareness of our learned rules.
+Independent from Agent B -- a second pair of eyes on the same code.
+
+Prompt must be self-contained and include:
+- Repository path and branch name
+- How to find changed files: `git diff --name-only main...HEAD`
+- Read ALL changed files fully. Read 2-3 existing test files from the same operator
+  directory (or sibling operator) for comparison.
+- You are an adversarial reviewer. Your job is to FIND PROBLEMS, not confirm the code
+  is good. Assume the code was written by an AI agent that often produces plausible-but-wrong
+  code. Assume previous reviewers missed critical issues.
+- Check: correctness (does the code actually test what it claims?), error handling (every
+  error path, including helpers), resource cleanup (what happens if a test panics mid-way?),
+  assertion strength (are assertions testing the right thing?), race conditions, cross-file
+  conflicts (shared CRDs, global state, CR name collisions with other test files), mechanism
+  fidelity (if migrating from another language, does the Go code match the original mechanism?).
+- Report format: Category | Severity | File:Line | Issue | Recommendation
+
+### Step 2: Consolidate and present ALL findings
+
+Wait for all 3 agents to complete. Present ALL findings from ALL agents -- do NOT
+deduplicate or filter. Show which agent found each issue. If multiple agents found the
+same issue, that strengthens the finding. Discuss every finding with the user.
+
+Do NOT make changes until the user approves.
+
+### Step 3: Build verification
+
+After the user approves fixes (or if no fixes needed):
+```bash
+export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
+go build ./...
+go vet ./...
+gofmt -l <changed-directories>
+```
+All three must pass clean.
+
+### Step 4: README update
+
+If the PR adds, removes, or modifies test specs (`It` blocks), the operator's `README.md`
+must be updated to match. Each test entry needs: numbered heading with Polarion link,
+description, Operators/Cluster/Environment/Standalone/Pass criteria fields.
+
+### Step 5: CI test coverage
+
+If the PR has a completed Prow CI run, run `/prow-investigate <PR>` and cross-reference:
+- Extract all `reportxml.ID` values from changed Go files (the PR's Polarion IDs)
+- Check each ID appears in the CI test results as **PASSED** (not SKIPPED or absent)
+- If any PR test was **SKIPPED**: flag as **Critical** -- report which test, and the skip
+  reason from the log
+- If any PR test is **absent** from results: flag as **Critical** (test may not be wired
+  into the ginkgo suite or label filter excluded it)
+- A CI run where all existing tests pass but all NEW tests are skipped is a **false green**
+  -- the PR's actual changes were never validated
